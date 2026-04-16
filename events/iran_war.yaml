@@ -1,0 +1,30 @@
+name: iran_war
+display_name: "2026 Iran War / Strait of Hormuz Closure"
+start_date: "2026-02-28"
+end_date: "2026-04-16"
+baseline_date: "2026-02-27"
+seed_keywords:
+  - Iran
+  - Hormuz
+  - Strait of Hormuz
+  - oil
+  - LNG
+  - Brent
+  - shipping
+  - fertilizer
+  - Qatar
+tickers:
+  - {category: Energy,      name: "Brent Crude Oil",     symbol: "BZ=F"}
+  - {category: Energy,      name: "WTI Crude Oil",       symbol: "CL=F"}
+  - {category: Energy,      name: "Natural Gas",         symbol: "NG=F"}
+  - {category: Shipping,    name: "Shipping ETF",        symbol: "BOAT"}
+  - {category: Agriculture, name: "Wheat Futures",       symbol: "ZW=F"}
+  - {category: Agriculture, name: "Soybeans",            symbol: "ZS=F"}
+  - {category: Materials,   name: "Aluminum Futures",    symbol: "ALI=F"}
+  - {category: Chemicals,   name: "CF Industries",       symbol: "CF"}
+  - {category: Equity,      name: "S&P 500",             symbol: "^GSPC"}
+  - {category: Equity,      name: "Energy Sector ETF",   symbol: "XLE"}
+  - {category: Equity,      name: "Defense ETF",         symbol: "ITA"}
+rss_feeds:
+  - https://feeds.reuters.com/reuters/topNews
+  - https://feeds.apnews.com/rss/topnews

@@ -1,0 +1,23 @@
+# Data
+yfinance==0.2.51
+pandas==2.2.3
+pyyaml==6.0.2
+pydantic==2.9.2
+requests==2.32.3
+
+# News sources
+gdeltdoc==1.6.0
+newsapi-python==0.2.7
+feedparser==6.0.11
+
+# Dedup
+datasketch==1.6.5
+
+# Vector store + embeddings
+chromadb==0.5.18
+sentence-transformers==3.2.1
+
+# Testing
+pytest==8.3.3
+pytest-mock==3.14.0
+responses==0.25.3
