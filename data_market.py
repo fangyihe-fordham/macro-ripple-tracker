@@ -49,3 +49,34 @@ def get_price_on_date(symbol: str, d: date) -> Optional[float]:
     if match.empty:
         return None
     return float(match["Close"].iloc[0])
+
+
+def get_price_changes(cfg: EventConfig, as_of: date) -> dict:
+    """For each ticker, return {'baseline', 'latest', 'pct_change'} comparing baseline_date to as_of close."""
+    out = {}
+    for ticker in cfg.tickers:
+        df = _load(ticker.symbol)
+        if df is None or df.empty:
+            continue
+        baseline = df[df["Date"].dt.date == cfg.baseline_date]
+        latest = df[df["Date"].dt.date == as_of]
+        if baseline.empty or latest.empty:
+            continue
+        b = float(baseline["Close"].iloc[0])
+        l = float(latest["Close"].iloc[0])
+        out[ticker.symbol] = {
+            "baseline": b,
+            "latest": l,
+            "pct_change": (l - b) / b * 100.0,
+        }
+    return out
+
+
+def get_price_range(symbol: str, start: date, end: date) -> pd.Series:
+    """Return a Close-price Series indexed by Date for [start, end] inclusive."""
+    df = _load(symbol)
+    if df is None:
+        return pd.Series(dtype=float)
+    mask = (df["Date"].dt.date >= start) & (df["Date"].dt.date <= end)
+    sub = df.loc[mask, ["Date", "Close"]].set_index("Date")
+    return sub["Close"]

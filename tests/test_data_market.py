@@ -42,3 +42,24 @@ def test_get_price_on_date_missing_returns_none(tmp_data_dir, fake_yf):
     data_market.download_prices(cfg)
     # Weekend / non-trading day
     assert data_market.get_price_on_date("BZ=F", date(2026, 3, 1)) is None
+
+
+def test_get_price_changes_vs_baseline(tmp_data_dir, fake_yf):
+    cfg = load_event("iran_war")
+    data_market.download_prices(cfg)
+    changes = data_market.get_price_changes(cfg, as_of=date(2026, 3, 4))
+    # BZ=F: baseline Feb 27 close = 74.20, as_of Mar 4 close = 111.00
+    # pct_change = (111.00 - 74.20) / 74.20 * 100 ≈ 49.60%
+    assert "BZ=F" in changes
+    assert changes["BZ=F"]["baseline"] == pytest.approx(74.20)
+    assert changes["BZ=F"]["latest"] == pytest.approx(111.00)
+    assert changes["BZ=F"]["pct_change"] == pytest.approx(49.60, abs=0.1)
+
+
+def test_get_price_range(tmp_data_dir, fake_yf):
+    cfg = load_event("iran_war")
+    data_market.download_prices(cfg)
+    series = data_market.get_price_range("BZ=F", date(2026, 2, 26), date(2026, 3, 3))
+    # Inclusive on both ends; trading days only (no 2026-03-01 because fixture skips weekend)
+    assert list(series.index.date.astype(str)) == ["2026-02-26", "2026-02-27", "2026-03-02", "2026-03-03"]
+    assert series.iloc[-1] == pytest.approx(102.30)
