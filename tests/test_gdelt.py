@@ -28,11 +28,13 @@ def test_fetch_gdelt_returns_normalized_articles(monkeypatch, fixtures_dir):
     assert a["source"] == "example.com"
     assert a["date"] == "2026-02-28"
     assert a["source_kind"] == "gdelt"
-    # Filters must include seed keywords and the event date range
+    # Filters must include seed keywords and the event date range.
+    # gdeltdoc.Filters stashes everything into query_params, not named attrs.
     f = captured["filters"]
-    assert f.keyword and "Hormuz" in f.keyword
-    assert f.start_date == "2026-02-28"
-    assert f.end_date == "2026-04-16"
+    qp = " ".join(f.query_params)
+    assert "Hormuz" in qp
+    assert "startdatetime=20260228" in qp
+    assert "enddatetime=20260416" in qp
 
 
 def test_fetch_gdelt_empty_result(monkeypatch):

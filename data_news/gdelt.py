@@ -5,16 +5,11 @@ from config import EventConfig
 
 
 def fetch(cfg: EventConfig) -> List[Dict]:
-    start = cfg.start_date.isoformat()
-    end = cfg.end_date.isoformat()
     filters = Filters(
         keyword=cfg.seed_keywords,
-        start_date=start,
-        end_date=end,
+        start_date=cfg.start_date.isoformat(),
+        end_date=cfg.end_date.isoformat(),
     )
-    filters.keyword = cfg.seed_keywords
-    filters.start_date = start
-    filters.end_date = end
     client = GdeltDoc()
     df = client.article_search(filters)
     if df.empty:
