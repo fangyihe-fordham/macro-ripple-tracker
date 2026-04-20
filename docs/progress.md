@@ -1,5 +1,54 @@
 # Progress Log
 
+## Session 2 — 2026-04-20
+
+**Model:** Claude Opus 4.7 (1M context) via Claude Code CLI.
+**Scope:** Plan 1 Tasks 4 and 5.
+**Outcome:** Both tasks complete and committed on `main`. 10 tests passing.
+
+### Tasks completed
+
+| Task | Commit | Summary |
+|---|---|---|
+| Plan 1 Task 4 — M2 % change + range | `178f0d0` | Added `get_price_changes(cfg, as_of)` and `get_price_range(symbol, start, end)` to `data_market.py`; 2 new tests in `tests/test_data_market.py` |
+| Plan 1 Task 5 — GDELT fetcher (subagent) | `d6a9519` | Created `data_news/__init__.py`, `data_news/gdelt.py`, `tests/test_gdelt.py`, `tests/fixtures/gdelt_response.json`; 2 new tests |
+| Plan 1 Task 5 cleanup | `b4e9fbe` | Removed decorative `filters.keyword=`/`.start_date=`/`.end_date=` post-hoc assignments that only existed to satisfy test introspection; test now asserts on `Filters.query_params` content |
+
+### Deviations from plan text
+
+- **Task 5**: The plan's spec passed `language="english"` to `gdeltdoc.Filters(...)` and asserted on `f.keyword` / `f.start_date` / `f.end_date`. In `gdeltdoc==1.6.0` neither works:
+  - `Filters.__init__` has no `language` kwarg (raises `TypeError`).
+  - `Filters` stashes constructor args into `query_params: list[str]` (URL fragments) and does not retain named attributes.
+- Fix: dropped `language=`; assert on `query_params` content (`startdatetime=20260228`, `enddatetime=20260416`, keyword `Hormuz` in joined fragments). English-only filtering can be added later via the `near`/custom query route if needed.
+- **Process note**: first Task 5 subagent landed a working but ugly solution (post-hoc attr assignment on the Filters instance to satisfy test assertions); I caught it in review and did a follow-up refactor commit. Subagents need review for code smell, not just green tests.
+
+### Current state
+
+- **Pytest**: `/opt/anaconda3/envs/macro-ripple/bin/pytest -v` → **10 passed**.
+- **Public APIs available:**
+  - `config.load_event(name)` → `EventConfig`
+  - `data_market.download_prices(cfg)`, `get_price_on_date(symbol, d)`, `get_price_changes(cfg, as_of)`, `get_price_range(symbol, start, end)`
+  - `data_news.gdelt.fetch(cfg)` → `List[Dict]` with keys `{url, headline, source, date, snippet, full_text, source_kind}`
+- **Files on disk (new this session):**
+  - `data_news/__init__.py` (empty; populated in Task 10)
+  - `data_news/gdelt.py`
+  - `tests/test_gdelt.py`
+  - `tests/fixtures/gdelt_response.json`
+
+### Next session — exact next step
+
+**Plan 1 Task 6 (subagent): NewsAPI fetcher.** Requires `NEWSAPI_KEY` env var at runtime but unit tests mock the client, so no key needed to land the task. Source of truth: `docs/superpowers/plans/2026-04-16-plan-1-data-foundation.md` → Task 6.
+
+After Task 6: Task 7 (RSS fetcher, subagent), Task 8 (dedup, inline per mapping? actually subagent per CLAUDE.md mapping — follow the mapping), Task 9 (store, subagent), Task 10 (vector store + retrieve, subagent), Task 11 (`setup.py` orchestrator, inline), Task 12 (live smoke, inline).
+
+### Blockers
+
+Unchanged from Session 1:
+1. `ANTHROPIC_API_KEY` — required before Plan 2 Task 1; not yet obtained.
+2. `NEWSAPI_KEY` — required for a live NewsAPI smoke test but not for Task 6 unit tests. Free tier at https://newsapi.org/register.
+
+---
+
 ## Session 1 — 2026-04-16
 
 **Model:** Claude Opus 4.7 (1M context) via Claude Code CLI.
