@@ -1,0 +1,24 @@
+{
+  "articles": [
+    {
+      "url": "https://example.com/iran-hormuz-closure",
+      "url_mobile": "",
+      "title": "Iran closes Strait of Hormuz as conflict escalates",
+      "seendate": "20260228T120000Z",
+      "socialimage": "",
+      "domain": "example.com",
+      "language": "English",
+      "sourcecountry": "US"
+    },
+    {
+      "url": "https://other.com/oil-price-surge",
+      "url_mobile": "",
+      "title": "Brent jumps above $100 on Hormuz fears",
+      "seendate": "20260301T080000Z",
+      "socialimage": "",
+      "domain": "other.com",
+      "language": "English",
+      "sourcecountry": "UK"
+    }
+  ]
+}
