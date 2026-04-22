@@ -55,6 +55,19 @@ For Plans 2 and 3: decide per-task after Plan 1 lands. Default to subagent for L
 - Never skip hooks. Never amend. Never force-push.
 - Stage explicitly by file (`git add <files>`) — do not `git add -A`.
 
+## Acceptance Criteria (every task)
+
+Every task — inline or subagent — must clear all six before being declared done:
+
+1. **`pytest -v` — all PASSED, zero failures.** Run the full suite, not just the new test file.
+2. **`git diff HEAD~1 --stat` — only files listed in the plan are touched.** No drive-by edits to unrelated modules.
+3. **New function signatures match `MacroRippleTracker_Spec_v0.2.docx`.** If a plan task's function shape contradicts the spec, stop and flag it before implementing.
+4. **No hardcoded tickers / dates / keywords / paths in production code.** Everything event-specific comes from `EventConfig` (via `load_event`) or from function parameters. `DATA_DIR` env var is the one allowed runtime knob.
+5. **Commit message is `<type>(<scope>): <desc>` with the `Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>` trailer.** One commit per task.
+6. **Show the full `pytest -v` output before declaring done.** No paraphrasing the result — paste the tail that shows `N passed`.
+
+If a subagent returns green but any criterion above is unmet (e.g. extra files touched, hardcoded values, test-shaped decoration in production code), review and fix in a follow-up commit before moving on.
+
 ## Current Directory Structure (real, post-Task 3)
 
 ```
