@@ -1,3 +1,6 @@
+# Config
+python-dotenv==1.0.1
+
 # Data
 yfinance==0.2.51
 pandas==2.2.3

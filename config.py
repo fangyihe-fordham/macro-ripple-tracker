@@ -2,7 +2,12 @@ from datetime import date
 from pathlib import Path
 from typing import List
 import yaml
+from dotenv import load_dotenv
 from pydantic import BaseModel, model_validator
+
+# Load .env at import time so every entry point that touches config
+# (setup.py, pytest, Streamlit app) sees NEWSAPI_KEY / ANTHROPIC_API_KEY.
+load_dotenv()
 
 
 class Ticker(BaseModel):
