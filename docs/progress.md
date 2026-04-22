@@ -1,51 +1,105 @@
 # Progress Log
 
-## Session 2 — 2026-04-20
+## Session 2 — 2026-04-20 → 2026-04-22
 
 **Model:** Claude Opus 4.7 (1M context) via Claude Code CLI.
-**Scope:** Plan 1 Tasks 4 and 5.
-**Outcome:** Both tasks complete and committed on `main`. 10 tests passing.
+**Scope:** Plan 1 Task 4 (inline, TDD), Plan 1 Task 5 (subagent + review/refactor), Acceptance Criteria doc, `.env` infrastructure.
+**Outcome:** Tasks 4 & 5 complete and committed on `main`. Project-wide Acceptance Criteria checklist codified. Secrets pipeline wired via `python-dotenv`. 10 tests passing. Both API keys now in place on disk; Plans 1 Task 6+ and Plan 2 are unblocked for credentials purposes.
 
-### Tasks completed
+### Commits landed this session (chronological)
 
-| Task | Commit | Summary |
+| # | Commit | Type | Summary |
+|---|---|---|---|
+| 1 | `178f0d0` | feat(M2) | Plan 1 Task 4 — `get_price_changes(cfg, as_of)` + `get_price_range(symbol, start, end)` in `data_market.py`, 2 new tests in `tests/test_data_market.py` |
+| 2 | `d6a9519` | feat(M1) | Plan 1 Task 5 — GDELT fetcher (`data_news/__init__.py`, `data_news/gdelt.py`, `tests/test_gdelt.py`, `tests/fixtures/gdelt_response.json`) via subagent |
+| 3 | `b4e9fbe` | refactor(M1) | Post-subagent cleanup: removed decorative `filters.keyword=` / `.start_date=` / `.end_date=` assignments in `data_news/gdelt.py`; test now asserts on `Filters.query_params` (the library's real surface) |
+| 4 | `60df2ee` | docs | Session 2 handoff first pass (this file) |
+| 5 | `c3e8fc0` | docs | Added **Acceptance Criteria (every task)** six-item gate to `CLAUDE.md` — full pytest green, plan-only file scope, spec-matching signatures, no hardcoded event data, conventional commit + trailer, full pytest tail in report |
+| 6 | `b15ba33` | chore | `.env` loader via `python-dotenv` + `.env.example` committed template; `config.py` now calls `load_dotenv()` at import time; added `python-dotenv==1.0.1` to `requirements.txt` |
+
+### Tasks completed (plan mapping)
+
+| Task | Commit(s) | Files touched |
 |---|---|---|
-| Plan 1 Task 4 — M2 % change + range | `178f0d0` | Added `get_price_changes(cfg, as_of)` and `get_price_range(symbol, start, end)` to `data_market.py`; 2 new tests in `tests/test_data_market.py` |
-| Plan 1 Task 5 — GDELT fetcher (subagent) | `d6a9519` | Created `data_news/__init__.py`, `data_news/gdelt.py`, `tests/test_gdelt.py`, `tests/fixtures/gdelt_response.json`; 2 new tests |
-| Plan 1 Task 5 cleanup | `b4e9fbe` | Removed decorative `filters.keyword=`/`.start_date=`/`.end_date=` post-hoc assignments that only existed to satisfy test introspection; test now asserts on `Filters.query_params` content |
+| Plan 1 Task 4 — M2 % change + range (inline) | `178f0d0` | `data_market.py`, `tests/test_data_market.py` |
+| Plan 1 Task 5 — GDELT fetcher (subagent + cleanup) | `d6a9519`, `b4e9fbe` | `data_news/__init__.py` (empty), `data_news/gdelt.py`, `tests/test_gdelt.py`, `tests/fixtures/gdelt_response.json` |
 
 ### Deviations from plan text
 
-- **Task 5**: The plan's spec passed `language="english"` to `gdeltdoc.Filters(...)` and asserted on `f.keyword` / `f.start_date` / `f.end_date`. In `gdeltdoc==1.6.0` neither works:
-  - `Filters.__init__` has no `language` kwarg (raises `TypeError`).
-  - `Filters` stashes constructor args into `query_params: list[str]` (URL fragments) and does not retain named attributes.
-- Fix: dropped `language=`; assert on `query_params` content (`startdatetime=20260228`, `enddatetime=20260416`, keyword `Hormuz` in joined fragments). English-only filtering can be added later via the `near`/custom query route if needed.
-- **Process note**: first Task 5 subagent landed a working but ugly solution (post-hoc attr assignment on the Filters instance to satisfy test assertions); I caught it in review and did a follow-up refactor commit. Subagents need review for code smell, not just green tests.
+1. **Plan 1 Task 5 — `gdeltdoc.Filters` API shape.** The plan specified:
+   - `Filters(keyword=..., start_date=..., end_date=..., language="english")`
+   - Test assertions `f.keyword`, `f.start_date`, `f.end_date`
+
+   Neither works against `gdeltdoc==1.6.0` (the pinned version):
+   - `Filters.__init__` does not accept `language=` — raises `TypeError: __init__() got an unexpected keyword argument 'language'`. Its signature only accepts `start_date`, `end_date`, `timespan`, `num_records`, `keyword`, `domain`, `domain_exact`, `near`, `repeat`, `country`, `theme`.
+   - `Filters` discards the named kwargs immediately and stores the compiled query as `query_params: list[str]` (a list of URL fragments like `['(Iran OR Hormuz OR oil) ', '&startdatetime=20260228000000', '&enddatetime=20260416000000', '&maxrecords=250']`). The instance has no `.keyword`, `.start_date`, `.end_date` attributes after construction — `vars(f).keys()` returns `['query_params', '_valid_countries', '_valid_themes']`.
+
+   **Fix applied:** dropped the `language=` kwarg from the `Filters(...)` call; rewrote the Task 5 test to assert on `query_params` content — `"Hormuz" in " ".join(f.query_params)`, `"startdatetime=20260228" in ...`, `"enddatetime=20260416" in ...`. English-only filtering, if needed later, is a separate change (either via `near`/custom query string or a post-filter on the returned DataFrame).
+
+2. **Plan 1 Task 5 — subagent produced test-shaped production code.** The first subagent pass (commit `d6a9519`) discovered the `Filters` issue mid-implementation and chose to decorate the `Filters` instance with post-hoc attribute assignments purely to satisfy the plan's test assertions:
+
+   ```python
+   filters = Filters(keyword=..., start_date=..., end_date=...)
+   filters.keyword = cfg.seed_keywords     # dead code — not read by article_search
+   filters.start_date = start              # dead code
+   filters.end_date = end                  # dead code
+   ```
+
+   Behavior was correct (yfinance-style: kwargs drive `query_params`), but those three lines existed solely to make the test's `f.keyword` / `f.start_date` / `f.end_date` introspection pass. That inverts TDD: production code was shaped by the test assertion mechanics rather than by the real library surface. Caught in review and refactored in commit `b4e9fbe` — removed the decorative lines and rewrote the test to assert on `query_params` directly.
+
+   **Generalized lesson (now in `CLAUDE.md` under Acceptance Criteria):** a subagent returning green is *necessary but not sufficient*. Review the diff for (a) test-shaped decoration in production code, (b) files outside the plan's declared scope, (c) hardcoded event data, (d) silent downgrades like removed type hints or `except: pass`. Followup commit is the corrective action — do not amend.
+
+3. **Not a deviation, but newly documented:** added the **Acceptance Criteria (every task)** section to `CLAUDE.md` (commit `c3e8fc0`) codifying the six-item gate every task must clear. This was an ad-hoc check I applied in this session; future sessions should treat it as mandatory.
+
+4. **New infrastructure dependency — `python-dotenv==1.0.1`.** Not in the original plan. Added in commit `b15ba33` because the user chose `.env`-based secret management over shell `export`. `config.py` now calls `load_dotenv()` at import time, so any entry point that transitively imports config (every test, every future CLI / Streamlit run) gets `NEWSAPI_KEY` and `ANTHROPIC_API_KEY` in `os.environ` automatically. Listed under a new "Config" heading in `requirements.txt`, pinned at 1.0.1.
 
 ### Current state
 
-- **Pytest**: `/opt/anaconda3/envs/macro-ripple/bin/pytest -v` → **10 passed**.
+- **Pytest:** `/opt/anaconda3/envs/macro-ripple/bin/pytest -v` → **10 passed**.
+  - `tests/test_config.py`: 3 passed
+  - `tests/test_data_market.py`: 5 passed (Tasks 3 + 4)
+  - `tests/test_gdelt.py`: 2 passed (Task 5)
 - **Public APIs available:**
-  - `config.load_event(name)` → `EventConfig`
-  - `data_market.download_prices(cfg)`, `get_price_on_date(symbol, d)`, `get_price_changes(cfg, as_of)`, `get_price_range(symbol, start, end)`
-  - `data_news.gdelt.fetch(cfg)` → `List[Dict]` with keys `{url, headline, source, date, snippet, full_text, source_kind}`
-- **Files on disk (new this session):**
-  - `data_news/__init__.py` (empty; populated in Task 10)
-  - `data_news/gdelt.py`
-  - `tests/test_gdelt.py`
-  - `tests/fixtures/gdelt_response.json`
+  - `config.load_event(name) -> EventConfig` — pydantic v2 model with `name`, `display_name`, `start_date`, `end_date`, `baseline_date`, `seed_keywords: List[str]`, `tickers: List[Ticker]`, `rss_feeds: List[str]`.
+  - `config.Ticker` — pydantic v2 model with `category`, `name`, `symbol`.
+  - `data_market.download_prices(cfg) -> None` — writes one OHLCV CSV per ticker under `$DATA_DIR/prices/`, filename via `_csv_path()` sanitization.
+  - `data_market.get_price_on_date(symbol, d) -> Optional[float]` — close on a trading day; `None` for weekends / missing CSVs.
+  - `data_market.get_price_changes(cfg, as_of) -> dict[symbol -> {baseline, latest, pct_change}]` — baseline is `cfg.baseline_date` close, latest is `as_of` close, pct_change is signed percent.
+  - `data_market.get_price_range(symbol, start, end) -> pd.Series` — inclusive on both ends, Date-indexed Series of Close prices; trading days only.
+  - `data_news.gdelt.fetch(cfg) -> List[Dict]` — each dict has `{url, headline, source, date, snippet, full_text, source_kind}`; `source_kind="gdelt"`; `snippet` and `full_text` always empty for GDELT (API doesn't return bodies).
+- **Files on disk at end of session:**
+  - New this session: `data_news/__init__.py`, `data_news/gdelt.py`, `tests/test_gdelt.py`, `tests/fixtures/gdelt_response.json`, `.env` (gitignored, user-edited with real keys), `.env.example` (committed template).
+  - Modified this session: `config.py` (added `load_dotenv()` import + call), `requirements.txt` (added `python-dotenv==1.0.1`), `CLAUDE.md` (Acceptance Criteria section), `docs/progress.md`.
+- **Environment:** conda env `macro-ripple` at `/opt/anaconda3/envs/macro-ripple/bin/python`; `python-dotenv==1.0.1` installed via pip (had been at 1.2.2 automatically pulled as a transitive dep; pinned down).
+- **Secrets:** `NEWSAPI_KEY` and `ANTHROPIC_API_KEY` both populated in `/Users/fangyihe/appliedfinance/.env` (gitignored, never committed). Verify with `/opt/anaconda3/envs/macro-ripple/bin/python -c "import config, os; print(bool(os.environ.get('NEWSAPI_KEY')), bool(os.environ.get('ANTHROPIC_API_KEY')))"` → should print `True True`.
 
 ### Next session — exact next step
 
-**Plan 1 Task 6 (subagent): NewsAPI fetcher.** Requires `NEWSAPI_KEY` env var at runtime but unit tests mock the client, so no key needed to land the task. Source of truth: `docs/superpowers/plans/2026-04-16-plan-1-data-foundation.md` → Task 6.
+**Plan 1 Task 6 (subagent): NewsAPI fetcher.** Source of truth: `docs/superpowers/plans/2026-04-16-plan-1-data-foundation.md` → Task 6. Unit tests mock `NewsApiClient` so no live API calls happen during pytest — but `NEWSAPI_KEY` is now in `.env` for any live smoke run the session wants to do afterward.
 
-After Task 6: Task 7 (RSS fetcher, subagent), Task 8 (dedup, inline per mapping? actually subagent per CLAUDE.md mapping — follow the mapping), Task 9 (store, subagent), Task 10 (vector store + retrieve, subagent), Task 11 (`setup.py` orchestrator, inline), Task 12 (live smoke, inline).
+**Subagent brief must include** (do not let it read the plan file — paste the task text inline):
+- Which commits have already landed on `main` (`b15ba33` head; Task 5 + its cleanup are in). Pytest baseline is 10 passed.
+- Public APIs it can import (`config.load_event`, etc. — see "Public APIs available" above).
+- `python-dotenv` auto-loads `.env`; tests should monkeypatch `NEWSAPI_KEY` via `monkeypatch.setenv` / `monkeypatch.delenv` anyway, so they don't depend on the real key.
+- Reminder of the six Acceptance Criteria in `CLAUDE.md`.
+- The `gdeltdoc.Filters` lesson generalizes: when a plan's test assertions reference attributes of a third-party object, verify those attributes actually exist in the pinned library version before accepting the plan text verbatim. For `newsapi-python==0.2.7`, `NewsApiClient.get_everything(...)` returns a plain dict — safe, no special attrs.
+
+After Task 6, remaining Plan 1 tasks per the mode mapping in `CLAUDE.md`:
+- Task 7 — RSS fetcher (subagent)
+- Task 8 — URL + MinHash dedup (subagent)
+- Task 9 — articles.json store (subagent)
+- Task 10 — ChromaDB vector store + `retrieve()` (subagent; first run downloads ~80 MB MiniLM model)
+- Task 11 — `setup.py` orchestrator (inline; remember to add `from dotenv import load_dotenv; load_dotenv()` at the top — or just `import config` which does the same thing — before any fetcher that reads env keys)
+- Task 12 — live smoke test (inline, gated by `RUN_LIVE=1`)
 
 ### Blockers
 
-Unchanged from Session 1:
-1. `ANTHROPIC_API_KEY` — required before Plan 2 Task 1; not yet obtained.
-2. `NEWSAPI_KEY` — required for a live NewsAPI smoke test but not for Task 6 unit tests. Free tier at https://newsapi.org/register.
+**All Session 1 blockers resolved.** Status as of end of Session 2:
+
+1. ~~`ANTHROPIC_API_KEY` missing~~ — **resolved.** Populated in `.env`; will be picked up by `langchain-anthropic` via `os.environ` in Plan 2. Budget is user's pay-as-you-go account.
+2. ~~`NEWSAPI_KEY` missing~~ — **resolved.** Populated in `.env`. Free tier (100 req/day); if Plan 1 Task 6 live smoke hits the limit, either wait 24h or remove NewsAPI from the active source set (its `fetch()` returns `[]` when the key is unset, so degradation is graceful).
+3. **Plan 2 ready to start** whenever Plan 1 lands. No new blockers anticipated.
+4. **New operational concern (not a blocker but worth flagging):** ChromaDB persistent store lives at `$DATA_DIR/chroma_db/`. Task 10 will build it; Task 11 (`setup.py`) will populate it. Size estimate: ~10–50 MB depending on article count. Already gitignored via `data/` rule. No action needed.
 
 ---
 
