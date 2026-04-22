@@ -162,6 +162,8 @@ CSVs under `data/prices/` are named via `symbol.replace("=", "_").replace("^", "
 
 ### yfinance specifics
 
+- **Pinned at `0.2.66`.** `0.2.51` (original pin) was broken upstream: Yahoo's backend returned non-JSON for every ticker, surfacing as `YFTzMissingError('$%ticker%: possibly delisted; no timezone found')`. Discovered by the Task 12 live smoke; bumped to `0.2.66` in the same work.
+- **Always pass `multi_level_index=False` to `yf.download`.** Starting in the 0.2.x line, single-ticker calls default to MultiIndex columns (`[('Close', 'SPY'), ('Open', 'SPY'), ...]`) instead of flat (`['Close', 'Open', ...]`). Without the flag, `df.to_csv()` writes a garbage "ticker-name subheader" row under the real header, and downstream `pd.read_csv(..., parse_dates=["Date"])` reads the junk row as data and tries to parse `"SPY"` as a Date. `data_market.download_prices()` passes it; any new yfinance call site must too. The live smoke in `tests/test_smoke_live.py` mirrors this.
 - `start` is inclusive, `end` is exclusive — always pass `end_date + timedelta(days=1)` when we want end-date data.
 - Fetch window: `baseline_date - 7 days` through `end_date + 1` (pre-event buffer for chart context).
 

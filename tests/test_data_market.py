@@ -12,7 +12,7 @@ def fake_yf(monkeypatch, fixtures_dir):
     """Replace yfinance.download with a function that returns our fixture DataFrame."""
     df = pd.read_csv(fixtures_dir / "yf_brent_sample.csv", parse_dates=["Date"]).set_index("Date")
 
-    def fake_download(tickers, start, end, progress=False, auto_adjust=False):
+    def fake_download(tickers, start, end, progress=False, auto_adjust=False, **kwargs):
         return df.copy()
 
     monkeypatch.setattr(data_market.yf, "download", fake_download)

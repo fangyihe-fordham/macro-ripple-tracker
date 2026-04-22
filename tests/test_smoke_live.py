@@ -14,7 +14,7 @@ def test_yfinance_live_fetches_spy():
     import yfinance as yf
     end = date.today()
     start = end - timedelta(days=10)
-    df = yf.download("SPY", start=start.isoformat(), end=end.isoformat(), progress=False)
+    df = yf.download("SPY", start=start.isoformat(), end=end.isoformat(), progress=False, multi_level_index=False)
     assert not df.empty
     assert "Close" in df.columns
 

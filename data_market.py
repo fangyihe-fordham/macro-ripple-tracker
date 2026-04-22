@@ -27,7 +27,7 @@ def download_prices(cfg: EventConfig) -> None:
     start = cfg.baseline_date - timedelta(days=7)
     end = cfg.end_date + timedelta(days=1)
     for ticker in cfg.tickers:
-        df = yf.download(ticker.symbol, start=start, end=end, progress=False, auto_adjust=False)
+        df = yf.download(ticker.symbol, start=start, end=end, progress=False, auto_adjust=False, multi_level_index=False)
         if df.empty:
             continue
         df = df.reset_index().rename(columns={"index": "Date"})
