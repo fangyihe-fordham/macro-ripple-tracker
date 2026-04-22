@@ -1,0 +1,24 @@
+{
+  "status": "ok",
+  "totalResults": 2,
+  "articles": [
+    {
+      "source": {"id": null, "name": "Reuters"},
+      "author": "Reuters Staff",
+      "title": "Oil tops $100 as Iran escalation threatens Hormuz",
+      "description": "Brent crude surged above $100 on Monday.",
+      "url": "https://reuters.com/article-1",
+      "publishedAt": "2026-03-01T07:30:00Z",
+      "content": "Brent crude surged..."
+    },
+    {
+      "source": {"id": null, "name": "FT"},
+      "author": "FT Staff",
+      "title": "Shipping rates spike on Hormuz uncertainty",
+      "description": "Freight rates jumped 40%.",
+      "url": "https://ft.com/article-2",
+      "publishedAt": "2026-03-02T09:15:00Z",
+      "content": "Freight rates jumped..."
+    }
+  ]
+}
