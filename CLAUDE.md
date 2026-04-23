@@ -339,6 +339,10 @@ Things to know:
 - **Do not add fallback constants for missing keys.** If a fetcher needs `NEWSAPI_KEY`, do `os.environ.get("NEWSAPI_KEY")` and short-circuit on `None`. No `API_KEY = os.environ.get(..., "DEFAULT")`.
 - **`.env` must never be staged.** Stage explicitly by file (`git add <files>`) — not `git add -A`, not `git add .`. If you ever see `.env` in `git status --short`, stop and confirm before committing.
 - **When a subagent needs a key:** the `.env` is already loaded by the time the subagent's first `import config` runs. The subagent does not need to do anything special. However, the subagent's tests MUST monkeypatch the env var rather than rely on the real value, so that CI (if we ever have it) and fresh clones work.
+- **Claude Desktop can shadow `.env` with an empty export.** Running under Claude Desktop (macOS app), the parent shell exports `ANTHROPIC_API_KEY=` (empty string) into child processes. `load_dotenv()` without `override` treats that empty value as "already set" and refuses to replace it — so the real key in `.env` never reaches `os.environ`. Only live-run entry points are affected; unit tests use `monkeypatch.setenv` so they bypass `.env` entirely. Asymmetric handling across modules (Session 6, Plan 2):
+  - **`llm.py` uses `load_dotenv(override=True)`** — it is the live LLM entrypoint and needs the real key; override is safe because tests flip the env var AFTER import.
+  - **`config.py` uses `load_dotenv()` without override** — some test fixtures monkeypatch env vars before importing config, and `override=True` there would fight that.
+  - **If a future module adds a third live entry point** (e.g. Plan 3 Streamlit `app.py`), pick per-file: override if it's a user-facing live path, no override if tests inject the key before import.
 
 ## Subagent Review Checklist
 
