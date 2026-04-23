@@ -2,6 +2,31 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+## Changes from original (Session 3–4 reconciliation)
+
+The original Plan 2 was written before Plan 1's Round 1 + Round 2 hardening landed. Interfaces and environment state have since shifted. Concrete changes below; all were verified against the code on disk (not against Plan 2's claims about it):
+
+1. **`get_price_changes` return shape (commit `33f88f5`).** Now ALWAYS returns every `cfg.tickers` symbol keyed in the output dict, with an `available: bool` flag plus nullable `baseline / latest / pct_change`. Previously Plan 2 assumed only *available* tickers appeared in the dict and did `if sym in changes:` to gate attachment.
+   - **Task 6 test fixture** (`fake_changes`): each entry now includes `"available": True`.
+   - **Task 6 `attach_prices` impl**: gate on `changes[sym]["available"]`, not membership. This avoids a `TypeError` on `abs(None)` when a ticker is in `cfg.tickers` but has no CSV / no baseline match.
+   - **Task 7 + Task 9 test fixtures**: same `available: True` addition.
+2. **`.env` and `.env.example` already exist at repo root** (Plan 1 Session 2, commit `b15ba33`). `.env.example` already declares `ANTHROPIC_API_KEY` and `NEWSAPI_KEY`; `.env` already has both populated per CLAUDE.md. Task 1 Steps 3–4 changed from "create" to "verify".
+3. **`python-dotenv==1.0.1` already pinned in `requirements.txt`.** Task 1 Step 1 drops that line from the append list to avoid a duplicate pin.
+4. **`langgraph` pin bumped to `0.3.0`** per explicit decision outside this plan. `langchain / langchain-anthropic / langchain-core` pins left as originally scoped.
+5. **`retrieve()` can legitimately return `[]`** (empty or absent collection — `vector_store._collection(create=False)` returns `None` when the collection doesn't exist; `retrieve` guards with `coll is None or coll.count() == 0`). Added early-return guards in `run_news_agent` and `run_qa_agent` impls (Tasks 11 + 12) so the LLM isn't prompted with an empty snippet list.
+6. **Commit messages must include the `Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>` trailer** per CLAUDE.md Acceptance Criterion #5 (established in Plan 1). Every Task's commit example now shows the HEREDOC form.
+7. **Query focus extraction (Session 4).** The original Plan 2 passed `state["query"]` directly to `generate_ripple_tree`, which meant imperative prefixes like "Show me the ripple tree for..." leaked into the LLM's event description input. Intent classifier now returns `{intent, focus}` as JSON; `run_ripple_agent` uses `state["focus"]` with fallback to `cfg.display_name`. Tasks 8 (prompt + state + impl + fixture + tests) and 10 (impl + test) updated. `run_news_agent`, `run_market_agent`, and `run_qa_agent` continue to use `state["query"]` directly — they benefit from the full query text for retrieval.
+
+Non-changes worth noting (verified to still match):
+
+- `retrieve(query, top_k)` signature and hit shape `{text, url, headline, metadata, score}` where `metadata = {url, headline, source, date, source_kind}` — unchanged.
+- `config.load_event(name)` signature — unchanged.
+- `EventConfig.tickers` items expose `.symbol`, `.name`, `.category` — unchanged.
+- `cfg.end_date` is `datetime.date` — unchanged.
+- `data_news.__init__` re-exports `retrieve` — unchanged (the `from data_news import retrieve` import in `agent_ripple.py` + `agent_supervisor.py` remains correct).
+
+---
+
 **Prerequisite:** Plan 1 complete — `data_news.retrieve()`, `data_market.get_price_changes()`, `data_market.get_price_range()`, and `config.load_event()` are available and tested. The conda env `macro-ripple` is active.
 
 **Goal:** Build the AI reasoning layer: (M3) a ripple-tree generator that uses Claude Sonnet 4.6 to produce a structured multi-level industry impact tree, grounded with news citations (M1) and market data (M2); and (M4) a LangGraph supervisor that routes user queries to the right sub-agent (timeline / ripple / market / QA) and returns a unified response.
@@ -49,13 +74,13 @@ macro-ripple-tracker/
 
 - [ ] **Step 1: Append LangChain + LangGraph deps to `requirements.txt`**
 
-Append these lines:
+Append these lines (note: `python-dotenv==1.0.1` is already pinned on line 2 of `requirements.txt` from Plan 1, so it is NOT re-added here):
+
 ```
 langchain==0.3.7
 langchain-core==0.3.15
 langchain-anthropic==0.3.0
-langgraph==0.2.50
-python-dotenv==1.0.1
+langgraph==0.3.0
 ```
 
 - [ ] **Step 2: Install**
@@ -66,22 +91,26 @@ Expected: installs without conflicts against Plan 1 deps.
 Verify: `python -c "from langchain_anthropic import ChatAnthropic; from langgraph.graph import StateGraph; print('ok')"`
 Expected: `ok`
 
-- [ ] **Step 3: Create `.env.example`**
+- [ ] **Step 3: Verify `.env.example`**
+
+`.env.example` already exists at the repo root from Plan 1 Session 2 (commit `b15ba33`) and declares both `NEWSAPI_KEY` and `ANTHROPIC_API_KEY` as empty-value templates. No changes required. If `RUN_LIVE=` is desired as a template, append it:
 
 ```
-ANTHROPIC_API_KEY=sk-ant-...
-# Optional: for NewsAPI secondary source (Plan 1)
-NEWSAPI_KEY=
 # Optional: set to 1 to run live integration tests that hit real LLM + APIs
 RUN_LIVE=
 ```
 
-- [ ] **Step 4: Create `.env`** (local only — gitignored)
+Do NOT overwrite the existing `.env.example` contents — just verify keys are present.
+
+- [ ] **Step 4: Verify `.env`** (local only — gitignored)
+
+`.env` already exists per CLAUDE.md (Session 2) with both `NEWSAPI_KEY` and `ANTHROPIC_API_KEY` populated. Confirm with:
 
 ```bash
-cp .env.example .env
-# Edit .env and paste your real ANTHROPIC_API_KEY (from console.anthropic.com)
+/opt/anaconda3/envs/macro-ripple/bin/python -c "import config, os; print(bool(os.environ.get('ANTHROPIC_API_KEY')))"
 ```
+
+Expected: `True`. If `False`, edit `.env` to paste the real key from console.anthropic.com (no quotes, no spaces around `=`). Never stage `.env`.
 
 - [ ] **Step 5: Create `prompts/__init__.py`**
 
@@ -100,9 +129,16 @@ def load(name: str) -> str:
 - [ ] **Step 6: Commit**
 
 ```bash
-git add requirements.txt .env.example prompts/__init__.py
-git commit -m "chore: add LangChain/LangGraph deps + prompt loader"
+git add requirements.txt prompts/__init__.py
+git commit -m "$(cat <<'EOF'
+chore: add LangChain/LangGraph deps + prompt loader
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+EOF
+)"
 ```
+
+Note: `.env.example` is NOT staged — it already exists from Plan 1 and was unchanged in this task.
 
 ---
 
@@ -182,7 +218,12 @@ Expected: 3 passed
 
 ```bash
 git add llm.py tests/test_llm.py
-git commit -m "feat: central ChatAnthropic factory pinned to claude-sonnet-4-6"
+git commit -m "$(cat <<'EOF'
+feat: central ChatAnthropic factory pinned to claude-sonnet-4-6
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+EOF
+)"
 ```
 
 ---
@@ -277,7 +318,12 @@ Rules:
 
 ```bash
 git add prompts/ripple_system.txt tests/fixtures/ripple_llm_response.json
-git commit -m "feat(M3): ripple tree prompt + fixture response"
+git commit -m "$(cat <<'EOF'
+feat(M3): ripple tree prompt + fixture response
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+EOF
+)"
 ```
 
 ---
@@ -399,7 +445,12 @@ Expected: 3 passed
 
 ```bash
 git add agent_ripple.py tests/test_agent_ripple.py
-git commit -m "feat(M3): generate ripple tree structure via LLM"
+git commit -m "$(cat <<'EOF'
+feat(M3): generate ripple tree structure via LLM
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+EOF
+)"
 ```
 
 ---
@@ -485,7 +536,12 @@ Expected: 4 passed
 
 ```bash
 git add agent_ripple.py tests/test_agent_ripple.py
-git commit -m "feat(M3): attach supporting news citations per tree node"
+git commit -m "$(cat <<'EOF'
+feat(M3): attach supporting news citations per tree node
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+EOF
+)"
 ```
 
 ---
@@ -505,14 +561,15 @@ def test_attach_prices_uses_ticker_hints(monkeypatch, fixtures_dir):
     raw = (fixtures_dir / "ripple_llm_response.json").read_text()
     tree = json.loads(raw)
 
+    # Post-Plan-1 shape: every ticker keyed, with `available` flag.
     fake_changes = {
-        "BZ=F": {"baseline": 74.20, "latest": 111.00, "pct_change": 49.60},
-        "CL=F": {"baseline": 70.00, "latest": 100.00, "pct_change": 42.86},
-        "XLE":  {"baseline": 95.00, "latest": 118.00, "pct_change": 24.21},
-        "CF":   {"baseline": 80.00, "latest": 92.00,  "pct_change": 15.00},
-        "NG=F": {"baseline": 3.00,  "latest": 4.50,   "pct_change": 50.00},
-        "BOAT": {"baseline": 25.00, "latest": 27.00,  "pct_change": 8.00},
-        "ITA":  {"baseline": 150.0, "latest": 162.0,  "pct_change": 8.00},
+        "BZ=F": {"available": True, "baseline": 74.20, "latest": 111.00, "pct_change": 49.60},
+        "CL=F": {"available": True, "baseline": 70.00, "latest": 100.00, "pct_change": 42.86},
+        "XLE":  {"available": True, "baseline": 95.00, "latest": 118.00, "pct_change": 24.21},
+        "CF":   {"available": True, "baseline": 80.00, "latest": 92.00,  "pct_change": 15.00},
+        "NG=F": {"available": True, "baseline": 3.00,  "latest": 4.50,   "pct_change": 50.00},
+        "BOAT": {"available": True, "baseline": 25.00, "latest": 27.00,  "pct_change": 8.00},
+        "ITA":  {"available": True, "baseline": 150.0, "latest": 162.0,  "pct_change": 8.00},
     }
     monkeypatch.setattr(agent_ripple, "get_price_changes",
                         lambda cfg, as_of: fake_changes)
@@ -545,7 +602,13 @@ from data_market import get_price_changes
 
 
 def attach_prices(tree: Dict, cfg: EventConfig, as_of: date) -> Dict:
-    """For each node, resolve ticker_hints → pct_change; node gets max-magnitude and details."""
+    """For each node, resolve ticker_hints → pct_change; node gets max-magnitude and details.
+
+    `get_price_changes` always returns every ticker in cfg keyed, with an
+    `available` flag. Gate on `available` — unavailable entries have
+    None for baseline/latest/pct_change, so mixing them into details would
+    break abs(pct_change).
+    """
     changes = get_price_changes(cfg, as_of=as_of)
 
     def _walk(nodes: List[Dict]) -> None:
@@ -553,8 +616,9 @@ def attach_prices(tree: Dict, cfg: EventConfig, as_of: date) -> Dict:
             hints = n.get("ticker_hints", []) or []
             details = []
             for sym in hints:
-                if sym in changes:
-                    details.append({"symbol": sym, **changes[sym]})
+                entry = changes.get(sym)
+                if entry and entry.get("available"):
+                    details.append({"symbol": sym, **entry})
             if details:
                 # Attach the largest-magnitude change as the node's headline number
                 top = max(details, key=lambda d: abs(d["pct_change"]))
@@ -577,7 +641,12 @@ Expected: 5 passed
 
 ```bash
 git add agent_ripple.py tests/test_agent_ripple.py
-git commit -m "feat(M3): attach market data per node from ticker_hints"
+git commit -m "$(cat <<'EOF'
+feat(M3): attach market data per node from ticker_hints
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+EOF
+)"
 ```
 
 ---
@@ -600,7 +669,7 @@ def test_generate_ripple_tree_end_to_end(monkeypatch, fixtures_dir):
                         lambda q, top_k: [{"text": "x", "url": "u", "headline": "h",
                                            "metadata": {"date": "2026-03-01"}, "score": 0.8}])
     monkeypatch.setattr(agent_ripple, "get_price_changes",
-                        lambda cfg, as_of: {"BZ=F": {"baseline": 74.2, "latest": 111.0, "pct_change": 49.6}})
+                        lambda cfg, as_of: {"BZ=F": {"available": True, "baseline": 74.2, "latest": 111.0, "pct_change": 49.6}})
 
     cfg = load_event("iran_war")
     from datetime import date
@@ -644,7 +713,12 @@ Expected: 6 passed
 
 ```bash
 git add agent_ripple.py tests/test_agent_ripple.py
-git commit -m "feat(M3): public generate_ripple_tree orchestrator"
+git commit -m "$(cat <<'EOF'
+feat(M3): public generate_ripple_tree orchestrator
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+EOF
+)"
 ```
 
 ---
@@ -660,29 +734,44 @@ git commit -m "feat(M3): public generate_ripple_tree orchestrator"
 - [ ] **Step 1: Create `prompts/intent_system.txt`**
 
 ```
-Classify the user query into exactly one of these intents:
+Classify the user query and extract its focus. Respond with ONLY a JSON object
+(no code fences, no prose):
 
+{"intent": "<one of: timeline | ripple | market | qa>", "focus": "<2-6 word noun phrase or empty string>"}
+
+Intents:
 - timeline: user wants a chronological list of key events
 - ripple:   user wants a multi-level industry impact / causal diagram
 - market:   user wants price changes / chart data for specific tickers or sectors
 - qa:       anything else — free-form question about the event, needs grounded answer
 
-Respond with ONLY one word: timeline | ripple | market | qa
-No punctuation, no explanation.
+Focus rules:
+- focus is a 2-6 word noun phrase describing the event or sub-topic the user
+  cares about. Examples: "Hormuz closure", "oil price reaction",
+  "fertilizer price increase".
+- Strip imperative verbs ("show me", "tell me", "draw", "what about"),
+  trailing question marks, and generic filler ("the ripple tree for",
+  "the impact of", "give me").
+- If the query is too vague to extract a focus (e.g. "what happened?",
+  "???"), return "focus": "" — downstream code falls back to the event's
+  display name.
+- Do NOT invent topics not present in the query. Prefer empty over guessed.
+
+Output JSON only. No code fences. No prose.
 ```
 
 - [ ] **Step 2: Create `tests/fixtures/intent_examples.json`**
 
 ```json
 [
-  ["What happened on March 2?", "timeline"],
-  ["Show me the key events in order.", "timeline"],
-  ["How did oil price react?", "market"],
-  ["What's the % change in Brent since the war started?", "market"],
-  ["What industries are affected and why?", "ripple"],
-  ["Give me the ripple tree", "ripple"],
-  ["Why did fertilizer prices go up?", "qa"],
-  ["Is there a link between Hormuz and aluminum?", "qa"]
+  ["What happened on March 2?", "timeline", ""],
+  ["Show me the key events in order.", "timeline", ""],
+  ["How did oil price react?", "market", "oil price reaction"],
+  ["What's the % change in Brent since the war started?", "market", "Brent price change"],
+  ["What industries are affected and why?", "ripple", ""],
+  ["Show me the ripple tree for Hormuz closure", "ripple", "Hormuz closure"],
+  ["Why did fertilizer prices go up?", "qa", "fertilizer price increase"],
+  ["Is there a link between Hormuz and aluminum?", "qa", "Hormuz and aluminum link"]
 ]
 ```
 
@@ -706,20 +795,34 @@ class _FakeLLM:
 
 def test_classify_intent_all_examples(monkeypatch, fixtures_dir):
     examples = json.loads((fixtures_dir / "intent_examples.json").read_text())
-    replies = [expected for _, expected in examples]
+    # LLM now returns JSON with both intent and focus.
+    replies = [json.dumps({"intent": intent, "focus": focus})
+               for _, intent, focus in examples]
     monkeypatch.setattr(agent_supervisor, "get_chat_model", lambda **kw: _FakeLLM(replies))
 
-    for query, expected in examples:
+    for query, expected_intent, expected_focus in examples:
         state = {"query": query}
         out = agent_supervisor.classify_intent(state)
-        assert out["intent"] == expected
+        assert out["intent"] == expected_intent
+        assert out["focus"] == expected_focus
 
 
 def test_classify_intent_defaults_to_qa_on_garbage(monkeypatch):
+    # LLM returns JSON but with an invalid intent value — should fall back to qa.
     monkeypatch.setattr(agent_supervisor, "get_chat_model",
-                        lambda **kw: _FakeLLM(["gibberish-that-isnt-valid"]))
+                        lambda **kw: _FakeLLM([json.dumps({"intent": "gibberish", "focus": ""})]))
     out = agent_supervisor.classify_intent({"query": "???"})
     assert out["intent"] == "qa"
+    assert out["focus"] == ""
+
+
+def test_classify_intent_malformed_json_falls_back_to_qa_empty_focus(monkeypatch):
+    # LLM returns non-JSON garbage — should not crash; falls back to qa + "".
+    monkeypatch.setattr(agent_supervisor, "get_chat_model",
+                        lambda **kw: _FakeLLM(["not json at all"]))
+    out = agent_supervisor.classify_intent({"query": "???"})
+    assert out["intent"] == "qa"
+    assert out["focus"] == ""
 ```
 
 - [ ] **Step 4: Run test to verify it fails**
@@ -732,6 +835,8 @@ Expected: FAIL with `ModuleNotFoundError: No module named 'agent_supervisor'`
 ```python
 # agent_supervisor.py
 """M4: LangGraph supervisor. Routes queries to the right sub-agent."""
+import json
+import re
 from typing import Literal, Optional, TypedDict, List, Dict
 from datetime import date
 
@@ -745,12 +850,19 @@ from config import EventConfig
 Intent = Literal["timeline", "ripple", "market", "qa"]
 _VALID_INTENTS = {"timeline", "ripple", "market", "qa"}
 
+_FENCE_RE = re.compile(r"^```(?:json)?\s*|\s*```$", re.MULTILINE)
+
+
+def _strip_fences(s: str) -> str:
+    return _FENCE_RE.sub("", s.strip()).strip()
+
 
 class AgentState(TypedDict, total=False):
     query: str
     cfg: EventConfig
     as_of: date
     intent: Intent
+    focus: str
     news_results: List[Dict]
     market_data: Dict
     ripple_tree: Dict
@@ -759,25 +871,44 @@ class AgentState(TypedDict, total=False):
 
 
 def classify_intent(state: AgentState) -> AgentState:
+    """Ask the LLM to classify intent AND extract a focus phrase in one call.
+
+    Returns {"intent", "focus"}. Any parse error or invalid value degrades
+    gracefully: intent → "qa", focus → "". Never raises.
+    """
     system = load_prompt("intent_system")
-    llm = get_chat_model(temperature=0.0, max_tokens=10)
+    # Bumped from 10 → 100 tokens to accommodate the JSON payload
+    # (intent + focus can be ~40-60 tokens including braces and quoting).
+    llm = get_chat_model(temperature=0.0, max_tokens=100)
     resp = llm.invoke([SystemMessage(content=system),
                        HumanMessage(content=state["query"])])
-    word = (resp.content if isinstance(resp.content, str) else "").strip().lower()
+    raw = resp.content if isinstance(resp.content, str) else str(resp.content)
+    text = _strip_fences(raw)
+    try:
+        parsed = json.loads(text)
+    except json.JSONDecodeError:
+        return {"intent": "qa", "focus": ""}
+    word = str(parsed.get("intent", "")).strip().lower()
     intent: Intent = word if word in _VALID_INTENTS else "qa"  # type: ignore[assignment]
-    return {"intent": intent}
+    focus = str(parsed.get("focus", "")).strip()
+    return {"intent": intent, "focus": focus}
 ```
 
 - [ ] **Step 6: Run tests**
 
 Run: `pytest tests/test_agent_supervisor.py -v`
-Expected: 2 passed
+Expected: 3 passed
 
 - [ ] **Step 7: Commit**
 
 ```bash
 git add prompts/intent_system.txt tests/fixtures/intent_examples.json agent_supervisor.py tests/test_agent_supervisor.py
-git commit -m "feat(M4): AgentState + intent classifier node"
+git commit -m "$(cat <<'EOF'
+feat(M4): AgentState + intent classifier node
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+EOF
+)"
 ```
 
 ---
@@ -795,8 +926,8 @@ Append to `tests/test_agent_supervisor.py`:
 ```python
 def test_run_market_agent_returns_dict(monkeypatch):
     fake_changes = {
-        "BZ=F": {"baseline": 74.20, "latest": 111.00, "pct_change": 49.60},
-        "XLE":  {"baseline": 95.00, "latest": 118.00, "pct_change": 24.21},
+        "BZ=F": {"available": True, "baseline": 74.20, "latest": 111.00, "pct_change": 49.60},
+        "XLE":  {"available": True, "baseline": 95.00, "latest": 118.00, "pct_change": 24.21},
     }
     monkeypatch.setattr(agent_supervisor, "get_price_changes",
                         lambda cfg, as_of: fake_changes)
@@ -828,13 +959,18 @@ def run_market_agent(state: AgentState) -> AgentState:
 - [ ] **Step 4: Run tests**
 
 Run: `pytest tests/test_agent_supervisor.py -v`
-Expected: 3 passed
+Expected: 4 passed
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git add agent_supervisor.py tests/test_agent_supervisor.py
-git commit -m "feat(M4): market agent node"
+git commit -m "$(cat <<'EOF'
+feat(M4): market agent node
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+EOF
+)"
 ```
 
 ---
@@ -848,7 +984,10 @@ git commit -m "feat(M4): market agent node"
 - [ ] **Step 1: Add failing test**
 
 ```python
-def test_run_ripple_agent_delegates_to_m3(monkeypatch):
+def test_run_ripple_agent_uses_focus(monkeypatch):
+    """When state["focus"] is populated, it becomes the event_description
+    passed to generate_ripple_tree — NOT the raw user query (which may
+    contain imperative prefixes like "Show me the ripple tree for...")."""
     called = {}
     def fake_generate(event_description, cfg, as_of, max_depth=3, news_top_k=3):
         called["args"] = (event_description, cfg.name, as_of, max_depth)
@@ -857,16 +996,41 @@ def test_run_ripple_agent_delegates_to_m3(monkeypatch):
 
     cfg = load_event("iran_war")
     from datetime import date
-    state = {"query": "Show me the ripple tree for Hormuz closure", "cfg": cfg,
+    state = {"query": "Show me the ripple tree for Hormuz closure",
+             "focus": "Hormuz closure",
+             "cfg": cfg,
              "as_of": date(2026, 4, 15)}
     out = agent_supervisor.run_ripple_agent(state)
-    assert out["ripple_tree"]["event"].lower().startswith("show me")  # event description = user query
+    # First positional arg = event_description = focus, NOT the raw query.
+    assert called["args"][0] == "Hormuz closure"
     assert called["args"][1] == "iran_war"
+    assert out["ripple_tree"]["event"] == "Hormuz closure"
+
+
+def test_run_ripple_agent_falls_back_to_display_name(monkeypatch):
+    """When focus is empty or missing, fall back to cfg.display_name."""
+    called = {}
+    def fake_generate(event_description, cfg, as_of, max_depth=3, news_top_k=3):
+        called["args"] = (event_description,)
+        return {"event": event_description, "nodes": []}
+    monkeypatch.setattr(agent_supervisor, "generate_ripple_tree", fake_generate)
+
+    cfg = load_event("iran_war")
+    from datetime import date
+    # No focus key at all — simulates classify_intent returning focus="" and
+    # upstream pruning, or focus present but empty string.
+    state = {"query": "What industries are affected and why?",
+             "focus": "",
+             "cfg": cfg,
+             "as_of": date(2026, 4, 15)}
+    out = agent_supervisor.run_ripple_agent(state)
+    assert called["args"][0] == cfg.display_name
+    assert out["ripple_tree"]["event"] == cfg.display_name
 ```
 
 - [ ] **Step 2: Run test**
 
-Run: `pytest tests/test_agent_supervisor.py::test_run_ripple_agent_delegates_to_m3 -v`
+Run: `pytest tests/test_agent_supervisor.py::test_run_ripple_agent_uses_focus -v`
 Expected: FAIL with `AttributeError: ... 'run_ripple_agent'`
 
 - [ ] **Step 3: Implement ripple node**
@@ -878,8 +1042,13 @@ from agent_ripple import generate_ripple_tree
 
 
 def run_ripple_agent(state: AgentState) -> AgentState:
+    # Use the focus phrase extracted by classify_intent; fall back to the
+    # event's display_name when focus is empty or missing. Passing the raw
+    # query would leak imperative prefixes ("Show me the ripple tree for...")
+    # into the LLM's event_description input.
+    event_description = state.get("focus") or state["cfg"].display_name
     tree = generate_ripple_tree(
-        event_description=state["query"],
+        event_description=event_description,
         cfg=state["cfg"],
         as_of=state["as_of"],
     )
@@ -889,13 +1058,18 @@ def run_ripple_agent(state: AgentState) -> AgentState:
 - [ ] **Step 4: Run tests**
 
 Run: `pytest tests/test_agent_supervisor.py -v`
-Expected: 4 passed
+Expected: 6 passed
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git add agent_supervisor.py tests/test_agent_supervisor.py
-git commit -m "feat(M4): ripple agent node wraps M3"
+git commit -m "$(cat <<'EOF'
+feat(M4): ripple agent node wraps M3
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+EOF
+)"
 ```
 
 ---
@@ -971,6 +1145,11 @@ from data_news import retrieve
 
 def run_news_agent(state: AgentState) -> AgentState:
     hits = retrieve(state["query"], top_k=20)
+    # retrieve() returns [] when the Chroma collection is missing or empty
+    # (setup.py never ran, or no articles survived dedup). Short-circuit so we
+    # don't hand an empty snippet list to the LLM and get a hallucinated timeline.
+    if not hits:
+        return {"news_results": [], "timeline": []}
     bullets = "\n".join(
         f"- [{h.get('metadata', {}).get('date', '')}] {h.get('headline','')}: {h.get('text','')[:200]}"
         for h in hits
@@ -990,13 +1169,18 @@ def run_news_agent(state: AgentState) -> AgentState:
 - [ ] **Step 5: Run tests**
 
 Run: `pytest tests/test_agent_supervisor.py -v`
-Expected: 5 passed
+Expected: 7 passed
 
 - [ ] **Step 6: Commit**
 
 ```bash
 git add prompts/timeline_system.txt agent_supervisor.py tests/test_agent_supervisor.py
-git commit -m "feat(M4): news/timeline agent node"
+git commit -m "$(cat <<'EOF'
+feat(M4): news/timeline agent node
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+EOF
+)"
 ```
 
 ---
@@ -1060,6 +1244,13 @@ Append to `agent_supervisor.py`:
 ```python
 def run_qa_agent(state: AgentState) -> AgentState:
     hits = retrieve(state["query"], top_k=8)
+    # retrieve() can legitimately return []; respecting the grounded-only
+    # contract of the QA prompt means answering honestly rather than hallucinating.
+    if not hits:
+        return {
+            "news_results": [],
+            "response": {"answer": "No indexed articles match this question.", "citations": []},
+        }
     snippets = "\n\n".join(
         f"[{i+1}] url={h.get('url','')} date={h.get('metadata', {}).get('date','')}"
         f"\nheadline: {h.get('headline','')}\n{h.get('text','')[:600]}"
@@ -1080,13 +1271,18 @@ def run_qa_agent(state: AgentState) -> AgentState:
 - [ ] **Step 5: Run tests**
 
 Run: `pytest tests/test_agent_supervisor.py -v`
-Expected: 6 passed
+Expected: 8 passed
 
 - [ ] **Step 6: Commit**
 
 ```bash
 git add prompts/qa_system.txt agent_supervisor.py tests/test_agent_supervisor.py
-git commit -m "feat(M4): QA agent node with grounded citations"
+git commit -m "$(cat <<'EOF'
+feat(M4): QA agent node with grounded citations
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+EOF
+)"
 ```
 
 ---
@@ -1184,13 +1380,18 @@ def run(cfg: EventConfig, query: str, as_of: date) -> AgentState:
 - [ ] **Step 4: Run tests**
 
 Run: `pytest tests/test_agent_supervisor.py -v`
-Expected: 8 passed
+Expected: 10 passed
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git add agent_supervisor.py tests/test_agent_supervisor.py
-git commit -m "feat(M4): LangGraph graph assembly + run() entrypoint"
+git commit -m "$(cat <<'EOF'
+feat(M4): LangGraph graph assembly + run() entrypoint
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+EOF
+)"
 ```
 
 ---
@@ -1249,7 +1450,12 @@ Expected: JSON printed to stdout with `"intent": "market"` or `"qa"` and populat
 
 ```bash
 git add run.py
-git commit -m "feat: run.py CLI entrypoint for supervisor"
+git commit -m "$(cat <<'EOF'
+feat: run.py CLI entrypoint for supervisor
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+EOF
+)"
 ```
 
 ---
@@ -1306,7 +1512,12 @@ Expected (requires API key + completed Plan 1 setup): 2 passed.
 
 ```bash
 git add tests/test_live_agents.py
-git commit -m "test: gated live integration tests for M3+M4"
+git commit -m "$(cat <<'EOF'
+test: gated live integration tests for M3+M4
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+EOF
+)"
 ```
 
 ---
@@ -1331,7 +1542,7 @@ git commit -m "test: gated live integration tests for M3+M4"
 
 **Deviation:** spec §M3 Step 1 says "LLM generates impact tree" then "Agent calls M1.retrieve()" per node. This plan keeps generation and enrichment as three separate deterministic phases rather than a ReAct loop — easier to test, and the causal-structure quality doesn't benefit from interleaving retrieval (the model has strong priors from pretraining). If evaluation (Plan 3 §9.2) shows poor groundedness, add a refinement pass in follow-up work.
 
-**Type consistency:** `retrieve()` return shape (from Plan 1) is consumed in `attach_news`, `run_news_agent`, `run_qa_agent` — all expect `{text, url, headline, metadata, score}`. `get_price_changes()` return shape `{symbol: {baseline, latest, pct_change}}` is consumed by `attach_prices` and `run_market_agent`.
+**Type consistency:** `retrieve()` return shape (from Plan 1) is consumed in `attach_news`, `run_news_agent`, `run_qa_agent` — all expect `{text, url, headline, metadata, score}`. `retrieve()` may return `[]` when the Chroma collection is missing or empty; `attach_news` is naturally safe (iteration over empty list attaches `supporting_news=[]`), and `run_news_agent` / `run_qa_agent` short-circuit explicitly. `get_price_changes()` return shape `{symbol: {available, baseline, latest, pct_change}}` — every `cfg.tickers` symbol is always keyed, and `available` gates the numeric fields. `attach_prices` checks `entry["available"]` before using `pct_change` (otherwise `abs(None)` would blow up); `run_market_agent` passes the whole dict through unchanged, letting downstream UI / formatters read the `available` flag directly.
 
 **Deferred / out of scope for Plan 2:**
 - Streamlit rendering of these outputs (Plan 3)
