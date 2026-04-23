@@ -1,25 +1,29 @@
-# tests/test_gdelt.py
 import json
-from datetime import date
-import pytest
+
+import pandas as pd
+
 from data_news import gdelt
 from config import load_event
 
 
 def test_fetch_gdelt_returns_normalized_articles(monkeypatch, fixtures_dir):
-    captured = {}
+    captured = {"filters_list": []}
+    payload = json.loads((fixtures_dir / "gdelt_response.json").read_text())
 
     class FakeGdeltDoc:
         def article_search(self, filters):
-            captured["filters"] = filters
-            payload = json.loads((fixtures_dir / "gdelt_response.json").read_text())
-            import pandas as pd
-            return pd.DataFrame(payload["articles"])
+            captured["filters_list"].append(filters)
+            if len(captured["filters_list"]) == 1:
+                return pd.DataFrame(payload["articles"])
+            return pd.DataFrame()
 
     monkeypatch.setattr(gdelt, "GdeltDoc", lambda: FakeGdeltDoc())
+    monkeypatch.setattr(gdelt.time, "sleep", lambda s: None)
 
     cfg = load_event("iran_war")
     articles = gdelt.fetch(cfg)
+
+    assert len(captured["filters_list"]) == 7
 
     assert len(articles) == 2
     a = articles[0]
@@ -28,21 +32,43 @@ def test_fetch_gdelt_returns_normalized_articles(monkeypatch, fixtures_dir):
     assert a["source"] == "example.com"
     assert a["date"] == "2026-02-28"
     assert a["source_kind"] == "gdelt"
-    # Filters must include seed keywords and the event date range.
-    # gdeltdoc.Filters stashes everything into query_params, not named attrs.
-    f = captured["filters"]
-    qp = " ".join(f.query_params)
-    assert "Hormuz" in qp
-    assert "startdatetime=20260228" in qp
-    assert "enddatetime=20260416" in qp
+
+    first_qp = " ".join(captured["filters_list"][0].query_params)
+    last_qp = " ".join(captured["filters_list"][-1].query_params)
+    assert "Hormuz" in first_qp
+    assert "startdatetime=20260228" in first_qp
+    assert "enddatetime=20260416" in last_qp
 
 
 def test_fetch_gdelt_empty_result(monkeypatch):
     class FakeGdeltDoc:
         def article_search(self, filters):
-            import pandas as pd
             return pd.DataFrame()
 
     monkeypatch.setattr(gdelt, "GdeltDoc", lambda: FakeGdeltDoc())
+    monkeypatch.setattr(gdelt.time, "sleep", lambda s: None)
     cfg = load_event("iran_war")
     assert gdelt.fetch(cfg) == []
+
+
+def test_fetch_gdelt_chunk_failure_does_not_kill_pipeline(monkeypatch, fixtures_dir):
+    payload = json.loads((fixtures_dir / "gdelt_response.json").read_text())
+    call_log = []
+
+    class FakeGdeltDoc:
+        def article_search(self, filters):
+            call_log.append(filters)
+            if len(call_log) == 2:
+                raise RuntimeError("simulated GDELT outage")
+            if len(call_log) == 1:
+                return pd.DataFrame(payload["articles"])
+            return pd.DataFrame()
+
+    monkeypatch.setattr(gdelt, "GdeltDoc", lambda: FakeGdeltDoc())
+    monkeypatch.setattr(gdelt.time, "sleep", lambda s: None)
+
+    cfg = load_event("iran_war")
+    articles = gdelt.fetch(cfg)
+
+    assert len(call_log) == 7
+    assert len(articles) == 2
