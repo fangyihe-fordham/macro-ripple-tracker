@@ -76,3 +76,12 @@ def attach_prices(tree: Dict, cfg: EventConfig, as_of: date) -> Dict:
             _walk(n.get("children", []))
     _walk(tree.get("nodes", []))
     return tree
+
+
+def generate_ripple_tree(event_description: str, cfg: EventConfig, as_of: date,
+                         max_depth: int = 3, news_top_k: int = 3) -> Dict:
+    """Public entrypoint: structure -> news -> prices."""
+    tree = generate_structure(event_description, cfg, max_depth=max_depth)
+    tree = attach_news(tree, top_k=news_top_k)
+    tree = attach_prices(tree, cfg, as_of=as_of)
+    return tree

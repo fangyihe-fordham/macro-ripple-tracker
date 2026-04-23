@@ -103,3 +103,26 @@ def test_attach_prices_uses_ticker_hints(monkeypatch, fixtures_dir):
     assert oil["price_details"][0]["symbol"] in ("BZ=F", "CL=F", "XLE")
     airline = oil["children"][1]
     assert airline["price_change"] is None
+
+
+def test_generate_ripple_tree_end_to_end(monkeypatch, fixtures_dir):
+    raw = (fixtures_dir / "ripple_llm_response.json").read_text()
+    monkeypatch.setattr(agent_ripple, "get_chat_model", lambda **kw: _FakeLLM(raw))
+    monkeypatch.setattr(agent_ripple, "retrieve",
+                        lambda q, top_k: [{"text": "x", "url": "u", "headline": "h",
+                                           "metadata": {"date": "2026-03-01"}, "score": 0.8}])
+    monkeypatch.setattr(agent_ripple, "get_price_changes",
+                        lambda cfg, as_of: {"BZ=F": {"available": True, "baseline": 74.2, "latest": 111.0, "pct_change": 49.6}})
+
+    cfg = load_event("iran_war")
+    from datetime import date
+    tree = agent_ripple.generate_ripple_tree(
+        event_description="Strait of Hormuz closed",
+        cfg=cfg,
+        as_of=date(2026, 4, 15),
+        max_depth=3,
+    )
+    assert tree["event"]
+    oil = tree["nodes"][0]
+    assert oil["supporting_news"][0]["url"] == "u"
+    assert oil["price_change"] == pytest.approx(49.6)
