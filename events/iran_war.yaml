@@ -25,6 +25,11 @@ tickers:
   - {category: Equity,      name: "S&P 500",             symbol: "^GSPC"}
   - {category: Equity,      name: "Energy Sector ETF",   symbol: "XLE"}
   - {category: Equity,      name: "Defense ETF",         symbol: "ITA"}
-rss_feeds:
-  - https://feeds.reuters.com/reuters/topNews
-  - https://feeds.apnews.com/rss/topnews
+# RSS deprecated: Reuters shut down its public RSS feeds in June 2020, and
+# AP's topnews feed returns similarly stale / redirect content. GDELT (primary)
+# already indexes Reuters/AP article URLs, so disabling RSS removes a noisy
+# zero-yield branch. If RSS coverage is ever re-added, Google News RSS
+# (news.google.com/rss/search?q=...) is the likely path — keyword-queried
+# per-event, more maintenance but a usable stream. Leaving data_news/rss.py
+# in place as a skeleton for that future work.
+rss_feeds: []

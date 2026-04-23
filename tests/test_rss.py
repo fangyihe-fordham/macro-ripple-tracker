@@ -9,6 +9,9 @@ def test_fetch_rss_filters_by_keywords(monkeypatch, fixtures_dir):
     monkeypatch.setattr(rss, "_parse_feed", lambda url: parsed)
 
     cfg = load_event("iran_war")
+    # iran_war.yaml disables RSS in production (deprecated feeds); inject a
+    # synthetic feed URL here so rss.fetch has something to iterate over.
+    cfg.rss_feeds = ["https://example.com/feed.xml"]
     articles = rss.fetch(cfg)
 
     kept_urls = {a["url"] for a in articles}
