@@ -75,3 +75,28 @@ def run_ripple_agent(state: AgentState) -> AgentState:
         as_of=state["as_of"],
     )
     return {"ripple_tree": tree}
+
+
+from data_news import retrieve
+
+
+def run_news_agent(state: AgentState) -> AgentState:
+    hits = retrieve(state["query"], top_k=20)
+    # retrieve() returns [] when the Chroma collection is missing or empty.
+    # Short-circuit so the LLM isn't prompted with an empty snippet list.
+    if not hits:
+        return {"news_results": [], "timeline": []}
+    bullets = "\n".join(
+        f"- [{h.get('metadata', {}).get('date', '')}] {h.get('headline','')}: {h.get('text','')[:200]}"
+        for h in hits
+    )
+    system = load_prompt("timeline_system")
+    human = f"News snippets:\n{bullets}"
+    llm = get_chat_model(temperature=0.1, max_tokens=2048)
+    resp = llm.invoke([SystemMessage(content=system), HumanMessage(content=human)])
+    text = strip_fences(resp.content if isinstance(resp.content, str) else str(resp.content))
+    try:
+        timeline = json.loads(text)
+    except json.JSONDecodeError:
+        timeline = []
+    return {"news_results": hits, "timeline": timeline}

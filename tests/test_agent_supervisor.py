@@ -95,3 +95,29 @@ def test_run_ripple_agent_falls_back_to_display_name(monkeypatch):
     out = agent_supervisor.run_ripple_agent(state)
     assert called["args"][0] == cfg.display_name
     assert out["ripple_tree"]["event"] == cfg.display_name
+
+
+def test_run_news_agent_produces_timeline(monkeypatch):
+    fake_hits = [
+        {"text": "Iran closed Strait", "url": "u1", "headline": "Iran closes Hormuz",
+         "metadata": {"date": "2026-02-28"}, "score": 0.9},
+        {"text": "oil jumps", "url": "u2", "headline": "Brent tops $100",
+         "metadata": {"date": "2026-03-01"}, "score": 0.85},
+    ]
+    monkeypatch.setattr(agent_supervisor, "retrieve", lambda q, top_k: fake_hits)
+    monkeypatch.setattr(agent_supervisor, "get_chat_model", lambda **kw: _FakeLLM([
+        json.dumps([
+            {"date": "2026-02-28", "headline": "Iran closes Hormuz",
+             "impact_summary": "Seaborne oil transit halted."},
+            {"date": "2026-03-01", "headline": "Brent tops $100",
+             "impact_summary": "Crude spikes ~35% in 24h."},
+        ])
+    ]))
+    cfg = load_event("iran_war")
+    from datetime import date
+    state = {"query": "Timeline of key events", "cfg": cfg, "as_of": date(2026, 4, 15)}
+    out = agent_supervisor.run_news_agent(state)
+    assert len(out["timeline"]) == 2
+    assert out["timeline"][0]["date"] == "2026-02-28"
+    assert "news_results" in out
+    assert len(out["news_results"]) == 2
