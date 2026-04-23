@@ -798,7 +798,13 @@ def test_classify_intent_all_examples(monkeypatch, fixtures_dir):
     # LLM now returns JSON with both intent and focus.
     replies = [json.dumps({"intent": intent, "focus": focus})
                for _, intent, focus in examples]
-    monkeypatch.setattr(agent_supervisor, "get_chat_model", lambda **kw: _FakeLLM(replies))
+    # Session 6 correction: share ONE _FakeLLM instance across the 8 calls so
+    # `.pop(0)` advances through `replies`. The earlier
+    # `lambda **kw: _FakeLLM(replies)` form built a fresh instance on every
+    # `get_chat_model()` call, which caused every iteration to pop replies[0]
+    # ("timeline") and the test to fail on iteration 3.
+    fake = _FakeLLM(replies)
+    monkeypatch.setattr(agent_supervisor, "get_chat_model", lambda **kw: fake)
 
     for query, expected_intent, expected_focus in examples:
         state = {"query": query}
@@ -1554,3 +1560,5 @@ EOF
 ## Execution Notes (Session 6)
 
 - **Task 1 Step 1 pin correction:** `langchain-core==0.3.15` is impossible — `langchain-anthropic==0.3.0` requires `langchain-core>=0.3.17`. Bumped to `langchain-core==0.3.17` during execution (smallest change that satisfies the solver). `requirements.txt` reflects this; the `0.3.15` figure in Task 1 Step 1 above is superseded.
+- **Task 2 `llm.py` — `load_dotenv(override=True)`:** the plan's `load_dotenv()` does not override an already-set env var. Claude Desktop exports an empty `ANTHROPIC_API_KEY` in the parent shell that would shadow the real key in `.env`. `llm.py` uses `load_dotenv(override=True)`; `config.py` (Plan 1) is left unchanged.
+- **Task 8 test shared-`_FakeLLM` correction:** the in-task snippet is updated in place (see Step 3 above). The original `lambda **kw: _FakeLLM(replies)` built a fresh fake per call so every iteration popped `replies[0]`.
