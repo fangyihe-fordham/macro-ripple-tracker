@@ -1,5 +1,120 @@
 # Progress Log
 
+## Session 3 — 2026-04-22 → 2026-04-23
+
+**Model:** Claude Opus 4.7 (1M context) via Claude Code CLI.
+**Scope:** Plan 1 Tasks 6–12 (all remaining tasks) + two out-of-plan infrastructure fixes surfaced by the live smoke (yfinance upstream break, GDELT per-query cap, NewsAPI free-tier window).
+**Outcome:** **Plan 1 is code-complete and end-to-end verified on live data.** 21 pytest passing + 2 live-gated skipped. `python setup.py --event iran_war --refresh` runs clean against real GDELT + NewsAPI + RSS + yfinance, writing 1,166+ deduplicated articles, 11 price CSVs, ChromaDB vector index, and a manifest. Semantic retrieval returns relevant Hormuz-closure headlines (top hit score ≈ 0.39). **Plan 2 is unblocked.**
+
+### Commits landed this session (chronological)
+
+| # | Commit | Type | Summary |
+|---|---|---|---|
+| 1 | `1c0793e` | feat(M1) | **Task 6** — NewsAPI.org fetcher (secondary, opt-in via `NEWSAPI_KEY`). Subagent. |
+| 2 | `717d6c2` | feat(M1) | **Task 7** — RSS fetcher with keyword filtering. Subagent. |
+| 3 | `3e25d3f` | feat(M1) | **Task 8** — URL + MinHash dedup for cross-source news. Subagent. |
+| 4 | `24adb51` | feat(M1) | **Task 9** — `articles.json` read/write layer. Subagent. |
+| 5 | `44e2d12` | feat(M1) | **Task 10** — ChromaDB + MiniLM vector store with `retrieve()` public API; `data_news/__init__.py` populated for the first time. Subagent. Real MiniLM (local cache) used by test; no mock. |
+| 6 | `0b69dbe` | feat | **Task 11** — `setup.py` CLI orchestrator with `manifest.json`. Inline (per CLAUDE.md mode map). |
+| 7 | `deb4650` | test | **Task 12** — opt-in live smoke (`RUN_LIVE=1`) for yfinance + GDELT. Inline. |
+| 8 | `3beabee` | fix(M2) | **Out-of-plan** — yfinance `0.2.51` broken upstream (Yahoo returns non-JSON → `YFTzMissingError` for every ticker). Bumped pin to `0.2.66` and added `multi_level_index=False` to `yf.download` (single-ticker default changed to MultiIndex columns in the 0.2.x line, silently corrupting CSV writes). Surfaced by the Task 12 live smoke. |
+| 9 | `fc3704c` | fix(M1) | **Out-of-plan** — GDELT DOC API caps at 250 articles/query; split window into 7-day chunks with `num_records=250`, 2s sleep between chunks, per-chunk `try/except` so one failed chunk doesn't kill the run. NewsAPI free tier only serves the last 30 days; clamps `start_date = max(cfg.start_date, today-29)` and `end_date = min(cfg.end_date, today)`; whole body in `try/except` → `[]` on error. Updated `tests/test_gdelt.py` to match pagination (7 calls, not 1) and added a new chunk-failure resilience test. |
+
+Session 3 commits on `main` (most recent first): `fc3704c` → `3beabee` → `deb4650` → `0b69dbe` → `44e2d12` → `24adb51` → `3e25d3f` → `717d6c2` → `1c0793e`.
+
+### Tasks completed (plan mapping)
+
+| Task | Mode | Commit(s) | Files touched |
+|---|---|---|---|
+| Plan 1 Task 6 — NewsAPI fetcher | subagent | `1c0793e` | `data_news/newsapi_fetcher.py`, `tests/test_newsapi.py`, `tests/fixtures/newsapi_response.json` |
+| Plan 1 Task 7 — RSS fetcher | subagent | `717d6c2` | `data_news/rss.py`, `tests/test_rss.py`, `tests/fixtures/rss_sample.xml` |
+| Plan 1 Task 8 — URL + MinHash dedup | subagent | `3e25d3f` | `data_news/dedup.py`, `tests/test_dedup.py` |
+| Plan 1 Task 9 — `articles.json` store | subagent | `24adb51` | `data_news/store.py`, `tests/test_store.py` |
+| Plan 1 Task 10 — ChromaDB vector store + `retrieve()` | subagent | `44e2d12` | `data_news/vector_store.py`, `data_news/__init__.py` (modified from empty), `tests/test_vector_store.py` |
+| Plan 1 Task 11 — `setup.py` orchestrator | inline | `0b69dbe` | `setup.py`, `tests/test_setup_cli.py` |
+| Plan 1 Task 12 — live smoke (gated) | inline | `deb4650`, later patched in `3beabee` | `tests/test_smoke_live.py` (initial), `tests/test_smoke_live.py` + deps (in `3beabee`) |
+| — | infra | `3beabee` | yfinance pin + multi_level_index flag; `requirements.txt`, `data_market.py`, `tests/test_data_market.py` (fake_download `**kwargs`), `tests/test_smoke_live.py`, `CLAUDE.md` |
+| — | infra | `fc3704c` | GDELT pagination + NewsAPI 30-day clamp; `data_news/gdelt.py`, `data_news/newsapi_fetcher.py`, `tests/test_gdelt.py` |
+
+### Deviations from plan text
+
+Material plan deviations this session, with reasons:
+
+1. **Task 6 — plan's `FakeClient.get_everything` positional signature kept kwargs-compatible.** Plan text declared `def get_everything(self, q, from_param, to, language, page_size, page)` as a positional-named signature. Subagent kept it verbatim; production code calls it with kwargs so Python binds by name either way. No code change; flagged here only because the user explicitly required "use all keyword and parameter consistently" when starting the session — satisfied because production uses kwargs and the fake accepts them as kwargs via positional-by-name binding.
+
+2. **Task 10 — `_collection(create=False)` uses broad `except Exception`.** REPL-verified the pinned `chromadb==0.5.18` raises `chromadb.errors.InvalidCollectionException` when `get_collection` is called on a missing collection. Broad-except kept per CLAUDE.md "boundary try/except around third-party with real fallback strategy" allowance (future version may rename the exception). Not a deviation from plan text; flagged for future readers.
+
+3. **Task 12 — `Filters(keyword=["oil"], ..., language="english")` → `Filters(keyword=["oil", "crude"], ...)`.** Two plan-text bugs caught by running `RUN_LIVE=1 pytest tests/test_smoke_live.py` once:
+   - `gdeltdoc==1.6.0` `Filters.__init__` does not accept `language=` (same bug we hit in Task 5). Dropped.
+   - 1-element `keyword=["oil"]` triggers GDELT's "The specified phrase is too short" error because the serialized query becomes `(oil)` with a single OR'd term — GDELT requires multi-word or multi-term queries. Changed to `["oil", "crude"]`. Documented in the `deb4650` commit body.
+
+4. **Task 12 — `test_yfinance_live_fetches_spy` failed on first live run due to yfinance `0.2.51` being broken against the current Yahoo backend.** Every ticker (SPY, AAPL, MSFT, BZ=F) returned empty with `YFTzMissingError('possibly delisted; no timezone found')` because Yahoo returned non-JSON (likely an HTML block page). This is upstream infrastructure rot, not a plan-text bug. Fixed in commit `3beabee`:
+   - Bumped `yfinance==0.2.51 → 0.2.66` in `requirements.txt`.
+   - Discovered that single-ticker `yf.download` in the 0.2.x line (added at some point before 0.2.66) defaults to `multi_level_index=True`, returning `[('Close','SPY'), ('Open','SPY'), ...]` tuple-column names. Naive `df.to_csv()` then writes a garbage ticker-name subheader row *under* the real header, and downstream `pd.read_csv(..., parse_dates=["Date"])` reads that junk row as data and tries to parse `"SPY"` as a Date. Added `multi_level_index=False` to both `data_market.download_prices` and `tests/test_smoke_live.py`.
+   - Mocked tests in `tests/test_data_market.py` broke because `fake_download(tickers, start, end, progress=False, auto_adjust=False)` didn't accept the new `multi_level_index` kwarg. Widened to `**kwargs` so the fixture is tolerant of future yfinance signature drift.
+
+5. **Post-Task 12 — GDELT per-query cap + NewsAPI free-tier window.** User-directed work in commit `fc3704c`, not specified in plan text. GDELT DOC API caps `article_search` at 250 results per query; our fetcher previously returned only 250 articles for the entire 47-day window. Rewrote to iterate 7-day chunks (`while chunk_start < cfg.end_date`), each with `num_records=250`, sleeping 2s between chunks and wrapping each chunk in `try/except` so one ConnectionResetError doesn't blow up the whole pipeline. NewsAPI free tier rejects queries outside the last 30 days; added `max(cfg.start_date, today-29)` / `min(cfg.end_date, today)` clamping plus an outside-window short-circuit. The plan's Task 5 and Task 6 implementations were **not wrong** — they satisfied the plan text literally — but the plan text didn't anticipate these two operational ceilings. End result: GDELT now returns ~1,500 articles per event instead of 250.
+
+6. **Task 5 legacy test assertions updated in `fc3704c`.** Existing `tests/test_gdelt.py` patched `GdeltDoc` *inside* `fetch()`; after pagination, the fake's `article_search` is called 7 times per fetch, not 1. Updated both existing tests to (a) track a list of filters, (b) only return the fixture on the first chunk (so assertion count stays `len(articles) == 2`), and (c) monkeypatch `gdelt.time.sleep` to zero so tests stay fast. Added `test_fetch_gdelt_chunk_failure_does_not_kill_pipeline` that injects a `RuntimeError` on chunk 2 and asserts the remaining 6 chunks still execute.
+
+### Subagent review outcomes (this session)
+
+Tasks 6–10 were all dispatched to subagents per CLAUDE.md's Working Mode table. Review of each against the Acceptance Criteria + Subagent Review Checklist found **zero corrective follow-ups needed** this session — a notable improvement over Session 2's Task 5 (which needed the `b4e9fbe` refactor to strip test-shaped decoration). Why the improvement:
+- The brief template I converged on included: (a) full task text pasted verbatim, (b) explicit instructions to REPL-verify third-party library surface before implementing, (c) enumeration of red flags from CLAUDE.md's Subagent Review Checklist, (d) a "Report Format" requiring full pytest tail + `git diff HEAD~1 --stat`.
+- Every subagent that hit a library-surface question ran `inspect.signature` or a tiny REPL probe before touching the code. Specifically:
+  - Task 6 subagent verified `NewsApiClient.get_everything` signature (confirmed 6 kwargs match plan).
+  - Task 7 subagent ran a feedparser REPL check confirming RSS 2.0 `<description>` → `summary` key + `published_parsed` as `time.struct_time`.
+  - Task 10 subagent ran three REPL checks: `PersistentClient` signature, `embedding_functions.SentenceTransformerEmbeddingFunction` import path, `get_collection` raises `InvalidCollectionException` when missing.
+
+### Current state
+
+- **Pytest:** `/opt/anaconda3/envs/macro-ripple/bin/pytest -v` → **21 passed, 2 skipped** (5.21s). Skipped are the `RUN_LIVE=1`-gated smoke tests in `tests/test_smoke_live.py`. Running `RUN_LIVE=1 pytest tests/test_smoke_live.py -v` → 2 passed (both live probes green against current GDELT + Yahoo).
+- **Public APIs available (cumulative — all surfaces working):**
+  - `config.load_event(name) -> EventConfig`; `config.EventConfig`, `config.Ticker`.
+  - `data_market.download_prices(cfg)` (writes CSVs, now with `multi_level_index=False`); `.get_price_on_date(symbol, d)`; `.get_price_changes(cfg, as_of)`; `.get_price_range(symbol, start, end)`.
+  - `data_news.gdelt.fetch(cfg)` — now paginated 7-day chunks, ~1,500 articles on a 47-day window.
+  - `data_news.newsapi_fetcher.fetch(cfg, max_pages=1)` — 30-day clamp + whole-body try/except.
+  - `data_news.rss.fetch(cfg)` — keyword filter on `title + summary`.
+  - `data_news.dedup.deduplicate(articles, minhash_threshold=0.9)`.
+  - `data_news.store.write_articles(articles)` / `.read_articles()` — honors `DATA_DIR`.
+  - `data_news.vector_store.reset()` / `.index_articles(articles)` / `.retrieve(query, top_k=5)` — real MiniLM + ChromaDB.
+  - Package re-exports at `from data_news import retrieve, index_articles, reset, read_articles, write_articles`.
+  - `setup.main(argv)` — CLI entry point; writes `articles.json`, `prices/*.csv`, `chroma_db/`, `manifest.json`.
+- **Environment:** conda env `macro-ripple` at `/opt/anaconda3/envs/macro-ripple/bin/python`; `yfinance==0.2.66` (bumped from 0.2.51 this session), `python-dotenv==1.0.1`, everything else pinned per `requirements.txt`.
+- **Data on disk (from one full live run):** `data/articles.json` (1,217 unique articles — GDELT 1,500 + NewsAPI 100 + RSS 0 → dedup), `data/prices/` (11 CSVs — ALI_F, BOAT, BZ_F, CF, CL_F, GSPC, ITA, NG_F, XLE, ZS_F, ZW_F), `data/chroma_db/` (ChromaDB persistent index), `data/manifest.json` (snapshot timestamp + source counts). All gitignored.
+- **Spot-check findings from the live run:** Brent +30.97%, WTI +36.21%, Aluminum +18.71%, CF Industries +21.37%; S&P 500 +2.09%; BOAT (shipping) −2.08%, ITA (defense) −3.99%. Retrieval for "Hormuz closure" returns real-sounding headlines: "Brent Smashes Higher As The Strait Of Hormuz Is Closed | Live Wire" (score 0.39), "Brent To Stay Above $100 Through 2026 If Hormuz Closure Drags On Another Month" (0.33), "Brent Heads for Record Monthly Jump as Houthi Attacks Widen Conflict" (0.14).
+
+### Plan 1 — Verification Checklist (from plan §end)
+
+All boxes checked as of end of Session 3:
+
+- [x] `pytest -v` → all non-live tests pass (21 passed, 2 gated-skipped)
+- [x] `python setup.py --event iran_war --refresh` runs without errors (one transient ConnectionResetError on GDELT chunk 6 of 7 was gracefully skipped by the chunk-level `try/except`)
+- [x] `data/articles.json` contains ≥ 500 unique articles (1,217)
+- [x] `data/prices/` contains 11 CSVs, one per ticker
+- [x] `data/manifest.json` contains snapshot timestamp + counts
+- [x] `from data_news import retrieve; retrieve("oil Hormuz", top_k=5)` returns relevant hits (top 3 all real Brent/Hormuz headlines with positive similarity)
+- [x] `from data_market import get_price_changes; from config import load_event; get_price_changes(load_event("iran_war"), date(2026,4,15))` returns a dict with 11 entries including `BZ=F`
+
+**Plan 1 is DONE.** Plans 2 and 3 build on top of `retrieve()` and `get_price_changes()`, both of which are now green against live data.
+
+### Blockers
+
+**None.** All Session 2 blockers resolved in Session 2; Session 3 surfaced no new blockers. The one infrastructure issue found (yfinance 0.2.51 upstream break) was fixed in-session. ChromaDB emits noisy `Failed to send telemetry event ... capture() takes 1 positional argument but 3 were given` warnings on every client operation — harmless, bug in `chromadb==0.5.18`'s telemetry code, not suppressed because CLAUDE.md says "do NOT suppress chromadb's own telemetry warnings" (stays out of scope). Documented here so future sessions don't chase it.
+
+### Next session — exact next step
+
+**Plan 2 Task 1.** Source of truth: `docs/superpowers/plans/2026-04-16-plan-2-agents.md`. Read that plan file for the full task list. Per CLAUDE.md mode mapping: "Default to subagent for LLM-heavy code (agent_ripple, supervisor nodes), inline for UI tabs and eval modules." Plan 2 Task 1 almost certainly needs an agent (wires up `ChatAnthropic(model="claude-sonnet-4-6")` with `ANTHROPIC_API_KEY` which is already in `.env`). Before Plan 2 Task 1, sanity-check:
+
+```bash
+/opt/anaconda3/envs/macro-ripple/bin/python -c "import config, os; print(bool(os.environ.get('ANTHROPIC_API_KEY')))"
+# Expected: True
+```
+
+If Plan 2 Task 1's acceptance test hits the real API, budget ~$0.01–0.05 per test run (Sonnet 4.6 pricing × a few hundred tokens).
+
+---
+
 ## Session 2 — 2026-04-20 → 2026-04-22
 
 **Model:** Claude Opus 4.7 (1M context) via Claude Code CLI.

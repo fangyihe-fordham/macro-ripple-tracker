@@ -12,7 +12,7 @@ Applied Finance course project, v0.2. Agentic RAG that turns a macro/geopolitica
 
 All saved in `docs/superpowers/plans/`:
 
-- [`2026-04-16-plan-1-data-foundation.md`](docs/superpowers/plans/2026-04-16-plan-1-data-foundation.md) — **In progress.** 12 tasks. M1 news package (GDELT + NewsAPI + RSS + dedup + ChromaDB) and M2 market data (yfinance), glued by `setup.py`.
+- [`2026-04-16-plan-1-data-foundation.md`](docs/superpowers/plans/2026-04-16-plan-1-data-foundation.md) — **DONE (end of Session 3).** 12 tasks + 2 infra follow-ups. M1 news package (GDELT + NewsAPI + RSS + dedup + ChromaDB) and M2 market data (yfinance), glued by `setup.py`. All verification checklist items green against live data.
 - [`2026-04-16-plan-2-agents.md`](docs/superpowers/plans/2026-04-16-plan-2-agents.md) — Not started. 15 tasks. M3 ripple tree generator + M4 LangGraph supervisor.
 - [`2026-04-16-plan-3-ui-eval.md`](docs/superpowers/plans/2026-04-16-plan-3-ui-eval.md) — Not started. 12 tasks. M5 Streamlit 4-tab UI + §9 evaluation harness.
 
@@ -69,43 +69,66 @@ Every task — inline or subagent — must clear all six before being declared d
 
 If a subagent returns green but any criterion above is unmet (e.g. extra files touched, hardcoded values, test-shaped decoration in production code), review and fix in a follow-up commit before moving on.
 
-## Current Directory Structure (real, post-Task 5)
+## Current Directory Structure (real, end of Session 3 — Plan 1 done)
 
 ```
 /Users/fangyihe/appliedfinance/
 ├── CLAUDE.md                     # ← this file
 ├── MacroRippleTracker_Spec_v0.2.docx
 ├── environment.yml               # conda spec
-├── requirements.txt              # pinned deps (python-dotenv, yfinance, gdeltdoc, ...)
+├── requirements.txt              # pinned deps (yfinance bumped to 0.2.66 this session)
 ├── .gitignore                    # includes `.env` and `data/`
-├── .env                          # gitignored — NEWSAPI_KEY, ANTHROPIC_API_KEY (present as of Session 2)
+├── .env                          # gitignored — NEWSAPI_KEY, ANTHROPIC_API_KEY (both populated)
 ├── .env.example                  # committed template — same keys, empty values
 ├── config.py                     # EventConfig pydantic + load_event(); calls load_dotenv() at import
-├── data_market.py                # M2 (download_prices, get_price_on_date, get_price_changes, get_price_range)
+├── data_market.py                # M2: download_prices (multi_level_index=False), get_price_on_date, get_price_changes, get_price_range
+├── setup.py                      # one-shot orchestrator CLI: python setup.py --event <name> [--refresh]
 ├── data_news/                    # M1 news package
-│   ├── __init__.py               # empty; populated in Task 10 (retrieve() public API)
-│   └── gdelt.py                  # gdelt.fetch(cfg) — GDELT 2.0 fetcher
+│   ├── __init__.py               # re-exports retrieve, index_articles, reset, read_articles, write_articles
+│   ├── gdelt.py                  # 7-day chunk pagination (num_records=250, 2s sleep, per-chunk try/except)
+│   ├── newsapi_fetcher.py        # 30-day free-tier clamp + whole-body try/except
+│   ├── rss.py                    # keyword-filtered (title+summary), _parse_feed seam for tests
+│   ├── dedup.py                  # URL dedup → MinHash LSH (threshold 0.9, 5-token word shingles, 128 perms)
+│   ├── store.py                  # articles.json read/write via DATA_DIR env var
+│   └── vector_store.py           # ChromaDB PersistentClient + SentenceTransformerEmbeddingFunction (MiniLM)
 ├── events/
-│   └── iran_war.yaml             # reference event config
-├── data/                         # runtime, gitignored (does not exist yet in repo)
+│   └── iran_war.yaml             # source of truth for Iran War event (tickers + keywords + RSS feeds live here)
+├── data/                         # runtime, gitignored; populated by setup.py run
+│   ├── articles.json             # ~1.2k unique articles after cross-source dedup
+│   ├── prices/*.csv              # 11 files, one per cfg.tickers entry
+│   ├── chroma_db/                # persistent MiniLM vector index
+│   └── manifest.json             # event, snapshot_utc, article_count, source_counts, ticker_count
 ├── docs/
 │   ├── progress.md               # session log
 │   └── superpowers/plans/
-│       ├── 2026-04-16-plan-1-data-foundation.md
-│       ├── 2026-04-16-plan-2-agents.md
+│       ├── 2026-04-16-plan-1-data-foundation.md  # DONE
+│       ├── 2026-04-16-plan-2-agents.md           # next
 │       └── 2026-04-16-plan-3-ui-eval.md
 └── tests/
     ├── __init__.py               # empty
-    ├── conftest.py               # fixtures_dir, tmp_data_dir
-    ├── test_config.py            # 3 tests, passing
-    ├── test_data_market.py       # 5 tests, passing (3 from Task 3 + 2 from Task 4)
-    ├── test_gdelt.py             # 2 tests, passing (Task 5)
+    ├── conftest.py               # fixtures_dir, tmp_data_dir (sets DATA_DIR env)
+    ├── test_config.py            # 3 tests
+    ├── test_data_market.py       # 5 tests (fake_download accepts **kwargs for future yf.download drift)
+    ├── test_gdelt.py             # 3 tests (incl. chunk-failure resilience; monkeypatches gdelt.time.sleep)
+    ├── test_newsapi.py           # 2 tests
+    ├── test_rss.py               # 1 test
+    ├── test_dedup.py             # 2 tests
+    ├── test_store.py             # 2 tests
+    ├── test_vector_store.py      # 2 tests (run REAL MiniLM + ChromaDB; no mocks)
+    ├── test_setup_cli.py         # 1 end-to-end test (mocks fetchers at module level; real store + vector_store)
+    ├── test_smoke_live.py        # 2 tests, gated by RUN_LIVE=1 (real GDELT + yfinance SPY)
     └── fixtures/
         ├── yf_brent_sample.csv   # sample OHLCV for M2 tests
-        └── gdelt_response.json   # sample GDELT articles for Task 5 tests
+        ├── gdelt_response.json   # sample GDELT articles
+        ├── newsapi_response.json # sample NewsAPI /v2/everything payload
+        └── rss_sample.xml        # 3-item RSS 2.0 feed (2 keyword-matching, 1 not)
 ```
 
-**Commits on `main` at end of Session 2 (most recent first):** `b15ba33` → `c3e8fc0` → `60df2ee` → `b4e9fbe` → `d6a9519` → `178f0d0` → `1c5d7ed` → `77bfd0b` → `70e5bc9` → `1a4638a`.
+**Test counts:** 23 total → 21 pass + 2 gated-skip (or +2 live-pass with `RUN_LIVE=1`).
+
+**Commits on `main` at end of Session 3 (most recent first):** `fc3704c` → `3beabee` → `deb4650` → `0b69dbe` → `44e2d12` → `24adb51` → `3e25d3f` → `717d6c2` → `1c0793e` → `d1a23f2` → `b15ba33` → `c3e8fc0` → `60df2ee` → `b4e9fbe` → `d6a9519` → `178f0d0` → `1c5d7ed` → `77bfd0b` → `70e5bc9` → `1a4638a`.
+
+**Live-run baseline (last full `setup.py --refresh` against real APIs):** GDELT 1,500 (7 chunks, one ConnectionResetError skipped gracefully); NewsAPI 100; RSS 0; 1,217 unique after dedup; 11/11 price CSVs; `retrieve("Hormuz closure")` top hit score ≈ 0.39 on a real Brent-oil headline.
 
 ## Scope Lock
 
@@ -193,24 +216,35 @@ Things to know:
 - **Dates serialize to `YYYYMMDDHHMMSS` (no dashes)** in `query_params`. The kwarg accepts ISO `YYYY-MM-DD` strings, but the fragment is compact.
 - **Empty result handling:** `GdeltDoc().article_search(filters)` returns an empty `pd.DataFrame` (not `None`) when zero matches. Our `gdelt.fetch()` returns `[]` via the `df.empty` check.
 - **Seendate format in results:** `seendate` column values look like `20260228T120000Z`. Parse with slicing: `f"{seen[0:4]}-{seen[4:6]}-{seen[6:8]}"`.
+- **250-records-per-query hard cap.** GDELT's DOC API maxes `num_records` at 250 regardless of what you pass. The single call `article_search(Filters(start=2026-02-28, end=2026-04-16, keyword=[...]))` returned exactly 250 articles for a 47-day window. Our `data_news/gdelt.py` paginates by splitting the window into 7-day chunks and querying each with `num_records=250` (`while chunk_start < cfg.end_date: chunk_end = min(chunk_start + 7d, cfg.end_date)`). Chunks do not overlap and do not miss days because GDELT treats `enddatetime` as exclusive (midnight of that day). On a 47-day window this produces 7 chunks and ~1,500 articles (vs. the 250 ceiling of a single call).
+- **1-element `keyword=["oil"]` rejected.** Single-word queries trigger GDELT's "The specified phrase is too short" error because the serialized query becomes `(oil)` with a single OR'd term. Pass ≥2 terms (`keyword=["oil", "crude"]`) or a multi-word phrase (`keyword="oil crude"`). Our live smoke test in `tests/test_smoke_live.py` uses 2 keywords for this reason.
+- **Rate-limit + transient connection resets are routine on a multi-chunk run.** `data_news/gdelt.py` sleeps 2s between chunks (`time.sleep(_SLEEP_BETWEEN_CHUNKS)`) and wraps EACH chunk's `article_search` in `try/except Exception: print + continue` so one `ConnectionResetError` or GDELT 5xx doesn't kill the whole run. The last real run (commit `fc3704c`) saw one chunk fail with `ConnectionResetError(54, 'Connection reset by peer')` and the other 6 chunks completed — pipeline recovered cleanly. **Do NOT narrow the except to a specific exception class** without carefully checking what GDELT/`requests` can raise; the broad-except is load-bearing here.
+- **`tests/test_gdelt.py` monkeypatches `gdelt.time.sleep` to a no-op.** Without this, pagination tests would add `num_chunks × 2s = 14s` of sleep to the suite. The test that validates pagination also only returns the fixture from the FIRST chunk (FakeGdeltDoc uses a call counter); otherwise every chunk would multiply the expected article count.
 
-### `newsapi-python==0.2.7` (not yet integrated; Task 6)
+### `newsapi-python==0.2.7`
 
 - `NewsApiClient(api_key=str)`. `.get_everything(...)` returns a **plain dict** `{"status", "totalResults", "articles"}`. Safe to introspect — no opaque wrapper objects.
-- Free tier: 100 requests/day, no historical access beyond ~30 days. If Plan 1 runs a live smoke past the quota, `get_everything` raises `NewsAPIException` with HTTP 429. Wrap the live call (not the mocked unit tests) accordingly.
-- Convention: `fetch(cfg)` returns `[]` if `NEWSAPI_KEY` unset (don't raise). Unit tests `monkeypatch.delenv("NEWSAPI_KEY", raising=False)` to exercise this path.
+- Full signature (verified via `inspect.signature` on the pinned version): `get_everything(self, q=None, qintitle=None, sources=None, domains=None, exclude_domains=None, from_param=None, to=None, language=None, sort_by=None, page=None, page_size=None)`. The date kwarg is `from_param=` (not `from=` — `from` is a Python keyword); easy to get wrong.
+- **Free tier: 100 requests/day AND only the last ~30 days of history.** This is a HARD server-side cutoff: requesting `from_param=<date older than 30 days ago>` returns an HTTP 426 "parameterInvalid" error. `data_news/newsapi_fetcher.py` clamps `effective_start = max(cfg.start_date, today - 29d)` and `effective_end = min(cfg.end_date, today)`, and short-circuits to `[]` with a skip-message if the entire event window predates the 30-day window. If you bump this constant (`_FREE_TIER_LOOKBACK_DAYS = 29`), verify first that the NewsAPI plan has actually changed.
+- **Whole-body `try/except Exception: print + return []`.** Because NewsAPI can raise `NewsAPIException` with HTTP 426 (out of window), 429 (over quota), or transient 5xx/ConnectionError, our fetcher wraps everything past the key check. This keeps `setup.py` resilient when NewsAPI is down or over quota — you still get GDELT + RSS.
+- If unset, `fetch(cfg)` returns `[]` without calling the client (no raise). Unit tests `monkeypatch.delenv("NEWSAPI_KEY", raising=False)` to exercise this path; the "normalized" test `monkeypatch.setenv("NEWSAPI_KEY", "dummy-key")` so the code path runs under a fake client.
+- The existing unit test does NOT assert on the `from_param` value the fake received, only on the returned article shape — so the 30-day clamp in production is invisible to it. If you later need to assert the clamp, use `captured["calls"]` to introspect the fake's received args.
 
 ### `pydantic==2.9.2`
 
 - `model_validator(mode="after")` is the v2 idiom; `@root_validator` is v1 and will break. Cross-field validation goes in a post-init method, not in individual field validators.
 - `@field_validator` is also v2 but not currently used; prefer `model_validator` when you need multiple fields' final values.
 
-### `chromadb==0.5.18` (not yet integrated; Task 10)
+### `chromadb==0.5.18`
 
 - Use `chromadb.PersistentClient(path=str(dir))`. Do NOT use the deprecated `chromadb.Client(Settings(persist_directory=...))`.
-- First-run embedding model download (~80 MB for `all-MiniLM-L6-v2`) happens silently; expect a delay on the first `index_articles()` call of a fresh clone.
+- First-run embedding model download (~80 MB for `all-MiniLM-L6-v2`) happens silently; expect a delay on the first `index_articles()` call of a fresh clone. Subsequent runs use the cache in `~/.cache/huggingface/`.
 - `collection.query()` returns a dict with `{documents, metadatas, distances}` each wrapped in a one-element outer list (because the API accepts batch queries). Unpack with `res["documents"][0]`, etc.
-- `distance` is cosine distance in `[0, 2]` by default; convert to similarity via `1.0 - distance`.
+- `distance` is cosine distance in `[0, 2]` by default; convert to similarity via `1.0 - distance`. In practice for English news text, typical similarity scores land in `[0.1, 0.5]` — a 0.39 hit on a targeted query is a strong match.
+- **`get_collection` raises `chromadb.errors.InvalidCollectionException`** when the collection doesn't exist. Our `vector_store._collection(create=False)` wraps with `except Exception: return None` deliberately (forward-compat with possible exception-class renames). Do NOT narrow this to the specific exception class without a deliberate reason.
+- **Telemetry warnings are noisy but harmless.** Every `PersistentClient`, `get_or_create_collection`, `collection.add`, and `collection.query` call prints `Failed to send telemetry event ClientStartEvent: capture() takes 1 positional argument but 3 were given` to stderr. This is a bug in chromadb 0.5.18's `posthog` integration, not ours. Do NOT suppress it (out of scope and risks hiding real errors); just know it appears in every `python setup.py` run and in test output.
+- **ID format in `index_articles`:** `f"{source_kind}-{i}-{abs(hash(url))}"`. Python's `hash()` is salted per-process by `PYTHONHASHSEED`, so IDs are NOT reproducible across runs. This is fine because `reset()` wipes the collection before each `setup.py --refresh`, and IDs only need to be unique *within* a single build batch.
+- **Single-process LSH only.** `data_news.vector_store` assumes one writer; there's no locking. Two concurrent `setup.py` runs against the same `$DATA_DIR/chroma_db` would race. Mentioned for Plan 3 (Streamlit) — UI should not kick off a fresh `setup.py` while another is in flight.
 
 ## Secrets & Environment
 
@@ -251,7 +285,7 @@ Green tests from a subagent are *necessary but not sufficient*. Before accepting
 2. Read this file (`CLAUDE.md`) and [`docs/progress.md`](docs/progress.md) for what happened last session.
 3. Read the active plan file. Next task is listed in `progress.md` under "Next session — exact next step".
 4. Sanity-check the environment:
-   - `/opt/anaconda3/envs/macro-ripple/bin/pytest -v` → all existing tests passing (10 at end of Session 2).
+   - `/opt/anaconda3/envs/macro-ripple/bin/pytest -v` → **21 passed, 2 skipped** (end of Session 3). The 2 skipped are the `RUN_LIVE=1`-gated smoke probes in `tests/test_smoke_live.py`.
    - `/opt/anaconda3/envs/macro-ripple/bin/python -c "import config, os; print(bool(os.environ.get('NEWSAPI_KEY')), bool(os.environ.get('ANTHROPIC_API_KEY')))"` → `True True`. If either is `False`, check that `.env` at the repo root has both keys populated (no quotes, no spaces around `=`).
    - `git status --short` → clean. If `.env` appears here as untracked, verify it's still ignored by `.gitignore` (line 7) — do NOT stage it.
 5. Start the next task per the mode mapping in "Working Mode". If dispatching a subagent, paste the plan task text inline in the brief — do not hand it the plan file. Include "Library Quirks" entries relevant to the task in the subagent's brief.
