@@ -2,6 +2,7 @@
 import argparse
 import json
 import os
+import shutil
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -28,7 +29,18 @@ def main(argv: List[str] | None = None) -> int:
     print(f"[setup] Event: {cfg.display_name}  window: {cfg.start_date} → {cfg.end_date}")
 
     if args.refresh:
+        # --refresh means "nuke everything and rebuild". Previously only wiped
+        # the ChromaDB directory, leaving stale articles.json and prices/*.csv
+        # behind — a ticker removed from the YAML would silently keep its old
+        # CSV, and a shrunken/failed news fetch would overwrite a good snapshot
+        # partially. Now we wipe all three together.
         vector_store.reset()
+        arts_path = _data_dir() / "articles.json"
+        if arts_path.exists():
+            arts_path.unlink()
+        prices_dir = _data_dir() / "prices"
+        if prices_dir.exists():
+            shutil.rmtree(prices_dir)
 
     print("[setup] Fetching GDELT...")
     g = gdelt.fetch(cfg)
