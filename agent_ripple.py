@@ -8,6 +8,8 @@ from llm import get_chat_model
 from prompts import load as load_prompt
 from config import EventConfig
 from data_news import retrieve
+from datetime import date
+from data_market import get_price_changes
 
 
 _FENCE_RE = re.compile(r"^```(?:json)?\s*|\s*```$", re.MULTILINE)
@@ -47,6 +49,30 @@ def attach_news(tree: Dict, top_k: int = 3) -> Dict:
                  "score": h["score"]}
                 for h in hits
             ]
+            _walk(n.get("children", []))
+    _walk(tree.get("nodes", []))
+    return tree
+
+
+def attach_prices(tree: Dict, cfg: EventConfig, as_of: date) -> Dict:
+    """For each node, resolve ticker_hints -> pct_change; node gets max-magnitude and details."""
+    changes = get_price_changes(cfg, as_of=as_of)
+
+    def _walk(nodes: List[Dict]) -> None:
+        for n in nodes:
+            hints = n.get("ticker_hints", []) or []
+            details = []
+            for sym in hints:
+                entry = changes.get(sym)
+                if entry and entry.get("available"):
+                    details.append({"symbol": sym, **entry})
+            if details:
+                top = max(details, key=lambda d: abs(d["pct_change"]))
+                n["price_change"] = top["pct_change"]
+                n["price_details"] = sorted(details, key=lambda d: -abs(d["pct_change"]))
+            else:
+                n["price_change"] = None
+                n["price_details"] = []
             _walk(n.get("children", []))
     _walk(tree.get("nodes", []))
     return tree

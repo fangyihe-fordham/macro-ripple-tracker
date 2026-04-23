@@ -76,3 +76,30 @@ def test_attach_news_calls_retrieve_per_node(monkeypatch, fixtures_dir):
         assert len(n["supporting_news"]) >= 1
         assert "url" in n["supporting_news"][0]
     assert any("Oil Supply" in q for q, _ in calls)
+
+
+def test_attach_prices_uses_ticker_hints(monkeypatch, fixtures_dir):
+    raw = (fixtures_dir / "ripple_llm_response.json").read_text()
+    tree = json.loads(raw)
+
+    fake_changes = {
+        "BZ=F": {"available": True, "baseline": 74.20, "latest": 111.00, "pct_change": 49.60},
+        "CL=F": {"available": True, "baseline": 70.00, "latest": 100.00, "pct_change": 42.86},
+        "XLE":  {"available": True, "baseline": 95.00, "latest": 118.00, "pct_change": 24.21},
+        "CF":   {"available": True, "baseline": 80.00, "latest": 92.00,  "pct_change": 15.00},
+        "NG=F": {"available": True, "baseline": 3.00,  "latest": 4.50,   "pct_change": 50.00},
+        "BOAT": {"available": True, "baseline": 25.00, "latest": 27.00,  "pct_change": 8.00},
+        "ITA":  {"available": True, "baseline": 150.0, "latest": 162.0,  "pct_change": 8.00},
+    }
+    monkeypatch.setattr(agent_ripple, "get_price_changes",
+                        lambda cfg, as_of: fake_changes)
+
+    cfg = load_event("iran_war")
+    from datetime import date
+    enriched = agent_ripple.attach_prices(tree, cfg, as_of=date(2026, 4, 15))
+
+    oil = enriched["nodes"][0]
+    assert oil["price_change"] == pytest.approx(49.60)
+    assert oil["price_details"][0]["symbol"] in ("BZ=F", "CL=F", "XLE")
+    airline = oil["children"][1]
+    assert airline["price_change"] is None
