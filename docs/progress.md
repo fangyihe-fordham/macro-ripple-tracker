@@ -1,5 +1,98 @@
 # Progress Log
 
+## Session 5 — 2026-04-23 (afternoon) — Plan 2 MD reconciliation
+
+**Model:** Claude Opus 4.7 (1M context) via Claude Code CLI.
+**Scope:** `docs/superpowers/plans/2026-04-16-plan-2-agents.md` edits ONLY — bring Plan 2 into alignment with Plan 1's Round 1/2 contracts, then add a query-focus-extraction enhancement. **Zero production code touched.** No plan task executed; this session was pre-execution document maintenance.
+**Outcome:** One commit on `main` (`35f46e2`). Plan 2 file grew from ~350 → ~630 lines. Pytest unchanged at 34 passed + 2 skipped (this session did not touch test code). Plan 2 remains at "not started, fully unblocked" — its 15 task checkboxes are all still `- [ ]`.
+
+> Session 4's entry below (#16 in the commit table, and the "User-authored commit" header at line ~44) treats commit `35f46e2` as if it originated outside Session 4. **It did — Session 5 is that session.** The two overlap on the same calendar date (2026-04-23) but are semantically distinct activities (Plan 1 hardening vs. Plan 2 MD maintenance).
+
+### Commit landed
+
+| # | Commit | Type | Summary |
+|---|---|---|---|
+| 1 | `35f46e2` | docs(plan-2) | Bundles BOTH reconciliation waves (Wave A: Plan 1 contracts + env state; Wave B: focus extraction). 280 insertions, 69 deletions, one file (`docs/superpowers/plans/2026-04-16-plan-2-agents.md`). |
+
+### Work inside the session (two waves, single commit)
+
+**Wave A — Plan 1 contract/env reconciliation (6 sub-changes):**
+For each Plan-2-referenced interface, verified against the actual source file on disk (not against Plan 2's claims about it). Read `data_market.py`, `data_news/__init__.py`, `data_news/vector_store.py`, `data_news/store.py`, `config.py`, `requirements.txt`, `.env.example`, `events/iran_war.yaml`. Applied the following fixes:
+
+1. **`get_price_changes` `available`-flag contract** (from Session 4 commit `33f88f5`). Plan 2's Task 6 fixture `fake_changes` did not carry `"available": True`; the impl's gate was `if sym in changes:`. The current function returns every `cfg.tickers` symbol keyed — making `sym in changes` trivially true — and unavailable entries have `pct_change: None`. Under the old gate, `max(details, key=lambda d: abs(d["pct_change"]))` would raise `TypeError: bad operand type for abs(): 'NoneType'`. Rewrote the gate to `entry and entry.get("available")`. Same fixture update applied to Task 7 (end-to-end test) and Task 9 (market-node test).
+2. **`.env` / `.env.example` pre-existing** (Session 2 commit `b15ba33`). Plan 2 Task 1 Steps 3–4 reworded "create" → "verify". Step 1 dropped `python-dotenv==1.0.1` from the requirements.txt append list (already pinned on line 2 since Session 2).
+3. **langgraph pin bumped** `0.2.50 → 0.3.0` per user's explicit decision outside this conversation. `langchain` / `langchain-anthropic` / `langchain-core` pins left as originally scoped (`0.3.7` / `0.3.0` / `0.3.15`).
+4. **Empty-`retrieve()` guards** added to `run_news_agent` (returns `{news_results: [], timeline: []}`) and `run_qa_agent` (returns `{news_results: [], response: {answer: "No indexed articles match this question.", citations: []}}`) for the case when the Chroma collection is missing/empty and `retrieve()` returns `[]`. `attach_news` and `attach_prices` were already safe (iteration over empty list is a no-op); only LLM-calling paths are affected, because the LLM would hallucinate against empty snippet input otherwise.
+5. **`Co-Authored-By` trailer** added to all 15 task commit examples via HEREDOC form, per CLAUDE.md Acceptance Criterion #5.
+6. **Top-of-plan "Changes from original (Session 3–4 reconciliation)" section** enumerates these six sub-changes with commit refs. Non-changes (interfaces verified still-matching) are listed too. The executing session can spot-check at a glance.
+
+**Wave B — Query focus extraction (7 sub-changes):**
+Design intent: `run_ripple_agent` was passing `state["query"]` as `generate_ripple_tree`'s `event_description`. A user typing *"Show me the ripple tree for Hormuz closure"* would inject the imperative prefix ("Show me the ripple tree for") into the LLM's input. Fix: extract the focus noun phrase ("Hormuz closure") upstream, pass only that. Kept cost minimal by folding focus extraction into the existing intent-classifier LLM call (no extra round-trip).
+
+1. **`prompts/intent_system.txt`** now asks for JSON `{"intent": "...", "focus": "..."}` with focus rules: 2–6 word noun phrase; strip imperative verbs, trailing `?`, generic filler ("the ripple tree for", "the impact of"); return `""` on vague queries ("what happened?"); no invented topics.
+2. **`AgentState.focus: str`** added to the TypedDict.
+3. **`classify_intent` impl** parses JSON via new module-level `_strip_fences` + `_FENCE_RE` helpers (same regex as `agent_ripple.py` — duplicated for now, could be lifted later), validates `intent` against `_VALID_INTENTS` (defaulting to `qa`), defaults `focus` to `""`. `json.JSONDecodeError` degrades gracefully to `{"intent": "qa", "focus": ""}` — never raises. `max_tokens` bumped `10 → 100` for the JSON payload.
+4. **`intent_examples.json`** fixture reshape from `[query, intent]` pairs to `[query, intent, focus]` triples (8 examples).
+5. **Task 8 tests updated**:
+   - `test_classify_intent_all_examples`: now asserts both `intent` AND `focus`.
+   - `test_classify_intent_defaults_to_qa_on_garbage`: reframed — LLM returns VALID JSON with an INVALID `intent` value (`"gibberish"`); classifier still falls back to `qa`.
+   - **NEW** `test_classify_intent_malformed_json_falls_back_to_qa_empty_focus`: LLM returns non-JSON text; assert `{"intent": "qa", "focus": ""}` with no raise.
+6. **Task 10 tests rewritten**. The old `test_run_ripple_agent_delegates_to_m3` asserted `out["ripple_tree"]["event"].lower().startswith("show me")` — this **was locking in the exact bug we're now fixing** (see Deviations #3 below). Replaced with:
+   - `test_run_ripple_agent_uses_focus`: state has `focus="Hormuz closure"`; assert `generate_ripple_tree` called with `event_description="Hormuz closure"`, not the raw query.
+   - `test_run_ripple_agent_falls_back_to_display_name`: state has `focus=""`; assert `generate_ripple_tree` called with `cfg.display_name`.
+7. **`run_ripple_agent` impl**: `event_description = state.get("focus") or state["cfg"].display_name`. `run_news_agent`, `run_market_agent`, `run_qa_agent` **unchanged** — they benefit from the full query text for retrieval; only `run_ripple_agent` uses the narrowed focus.
+
+Expected-pytest counts in downstream Plan 2 tasks bumped accordingly: Task 8 `2 → 3`, Task 9 `3 → 4`, Task 10 `4 → 6` (+1 net from the replaced test + +1 for the new fallback test), Task 11 `5 → 7`, Task 12 `6 → 8`, Task 13 `8 → 10`.
+
+### Tasks completed (plan mapping)
+
+No Plan 2 task was executed this session. Plan 2's 15 task checkboxes are all still `- [ ]`. This was pure plan-document maintenance — a deliberately scope-limited pre-execution pass.
+
+### Deviations from intended plan-session flow
+
+1. **Plan mode activated mid-edit.** After the first Edit call landed (inserting the top-of-file "Changes from original" section), the Claude Code harness unexpectedly switched to plan mode — a restricted mode allowing writes only to a designated plan file under `~/.claude/plans/`. This was a harness action, not a user action. Workaround: wrote the full list of remaining edits as a structured plan to `/Users/fangyihe/.claude/plans/snuggly-hugging-willow.md`, called `ExitPlanMode`, then resumed regular Edit calls. All subsequent edits landed normally. **Not a project-level concern; a harness behavior** — if it recurs, the same workaround applies. Do not try to "push through" plan mode with more edits to the target file; the harness hard-blocks them.
+
+2. **Two waves bundled in one commit.** Wave A and Wave B were introduced by the user as two sequential tasks in separate conversation turns. Both were pure plan-md edits against the same file, so they were committed together as `35f46e2` rather than split. Commit message body mentions both waves explicitly. This departs from CLAUDE.md's "one commit per task" norm, but that norm targets plan-task-sized units of production-code change; this was a single pre-execution doc-maintenance activity. Noted for honesty.
+
+3. **The plan's own test was locking in the bug we needed to fix.** Task 10's original `test_run_ripple_agent_delegates_to_m3` contained `assert out["ripple_tree"]["event"].lower().startswith("show me")` — i.e. it expected the imperative prefix to survive into the event description. If the Wave B focus-extraction brief hadn't been written explicitly, a subagent executing Plan 2 would have satisfied this assertion by piping `state["query"]` straight through — exactly the bug we're fixing. **Lesson:** test assertions inherit any bias from the plan author's mental model; an assertion that "looks weird" (an imperative verb surviving into a field called `event_description`) is a red flag. Captured in CLAUDE.md's Subagent Review Checklist as entry 7 (Session 5 addition).
+
+4. **Test-count maintenance is an easy-to-miss chore.** When updating a plan's tests (adding one, splitting one into two), the `Expected: N passed` lines in every DOWNSTREAM task's "run tests" step must also be bumped. Missed on the first pass in Wave B (caught during self-verification via `grep -nE "Expected: [0-9]+ passed"`). Future plan-maintenance sessions should `grep` for this pattern after editing tests.
+
+### Files modified
+
+- `docs/superpowers/plans/2026-04-16-plan-2-agents.md` — 280 insertions, 69 deletions (one commit, `35f46e2`).
+
+Additional end-of-session updates (not yet committed at time of writing):
+- `docs/progress.md` — this section.
+- `CLAUDE.md` — new Subagent Review Checklist entry #7.
+
+### Current state (end of Session 5)
+
+- **Pytest:** unchanged from Session 4 — `/opt/anaconda3/envs/macro-ripple/bin/pytest -v` → 34 passed, 2 skipped (~5s).
+- **Git tree:** one commit ahead of `origin/main` after `35f46e2`; this wrap-up will add a second commit for progress.md + CLAUDE.md when the user asks.
+- **Plan 2 file:** ~630 lines. 15 tasks all `- [ ]`. Verification checklist at bottom untouched (still references ~24 total unit tests — conservative estimate; actual post-Plan-2 count will be ~44 = 34 current + 10 new supervisor + agent-ripple tests).
+- **Dependencies:** not yet installed. `requirements.txt` still does not contain `langchain*` / `langgraph*`. Plan 2 Task 1 Step 2 will `pip install` when executed.
+- **Plan 2's new shape at a glance (for the next session):**
+  - `classify_intent` returns `{intent: Intent, focus: str}`.
+  - `run_ripple_agent` consumes `state["focus"]` (fallback `cfg.display_name`), delegates to unchanged `generate_ripple_tree`.
+  - `run_news_agent` / `run_market_agent` / `run_qa_agent` unchanged; use `state["query"]` directly.
+  - `AgentState` TypedDict has `focus: str` added.
+  - Empty-`retrieve()` short-circuits in news + QA nodes.
+
+### Blockers
+
+**None.** Plan 2 Task 1 can start in the next session.
+
+Pre-flight concerns to raise with the user BEFORE Plan 2 Task 1 Step 2 (`pip install`):
+- `langchain-anthropic==0.3.0` and `langgraph==0.3.0` are new installs in a working env. Get user sign-off on the specific version pins before installing — per CLAUDE.md "executing actions with care," new deps that could break the existing test suite deserve confirmation even though Plan 1 code doesn't import them.
+- `langgraph==0.3.0`'s `StateGraph` API has NOT been validated against the plan's code snippets. Plan 2 Task 1 Step 2 does a basic import check (`from langgraph.graph import StateGraph`); if Task 13's `graph.add_conditional_edges(..., path_map={...})` signature doesn't match the pinned version, that's a first-task surprise. If it breaks, option A is pinning `langgraph==0.2.50` (what Plan 2 originally specified) and updating the reconciled plan's "Changes from original" entry #4 accordingly. Option B is adapting the graph-assembly code in Task 13.
+
+### Next session — exact next step
+
+**Plan 2 Task 1**, as documented at end of Session 4 (§"Next session — exact next step" in Session 4's entry below). Pre-task checklist and commands are unchanged; just start. The focus-extraction wrinkle is entirely contained in Tasks 8 + 10 per the reconciled plan — no new cross-task dependencies.
+
+---
+
 ## Session 4 — 2026-04-23
 
 **Model:** Claude Opus 4.7 (1M context) via Claude Code CLI.
