@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Dict, List
 
 import chromadb
+from chromadb.config import Settings
 from chromadb.errors import InvalidCollectionException
 from chromadb.utils import embedding_functions
 
@@ -27,7 +28,14 @@ def _db_dir() -> Path:
 
 def _client():
     _db_dir().mkdir(parents=True, exist_ok=True)
-    return chromadb.PersistentClient(path=str(_db_dir()))
+    # `anonymized_telemetry=False` suppresses posthog-integration errors
+    # ("Failed to send telemetry event ... capture() takes 1 positional
+    # argument but 3 were given") that chromadb 0.5.18 emits on every
+    # client call. That noise drowns out the real-error prints C3 added.
+    return chromadb.PersistentClient(
+        path=str(_db_dir()),
+        settings=Settings(anonymized_telemetry=False),
+    )
 
 
 def _embedder():
