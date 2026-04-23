@@ -17,7 +17,7 @@
     <item>
       <title>Hormuz shipping delays mount</title>
       <link>https://example.com/rss-3</link>
-      <description>Vessels diverting around the strait.</description>
+      <description>&lt;p&gt;Vessels diverting around the strait. &lt;a href="https://x"&gt;Read more&lt;/a&gt;&lt;/p&gt;&amp;nbsp;</description>
       <pubDate>Wed, 04 Mar 2026 10:00:00 GMT</pubDate>
     </item>
   </channel>

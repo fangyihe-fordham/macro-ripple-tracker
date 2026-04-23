@@ -18,3 +18,10 @@ def test_fetch_rss_filters_by_keywords(monkeypatch, fixtures_dir):
     for a in articles:
         assert a["source_kind"] == "rss"
         assert a["date"].startswith("2026-")
+        # Snippets must be plain text: no HTML tags, entities decoded.
+        assert "<" not in a["snippet"] and ">" not in a["snippet"]
+        assert "&amp;" not in a["snippet"] and "&nbsp;" not in a["snippet"]
+
+    rss3 = next(a for a in articles if a["url"] == "https://example.com/rss-3")
+    assert "Vessels diverting around the strait." in rss3["snippet"]
+    assert "Read more" in rss3["snippet"]
