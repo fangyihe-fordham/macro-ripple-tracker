@@ -58,3 +58,20 @@ from data_market import get_price_changes, get_price_range
 def run_market_agent(state: AgentState) -> AgentState:
     changes = get_price_changes(state["cfg"], as_of=state["as_of"])
     return {"market_data": changes}
+
+
+from agent_ripple import generate_ripple_tree
+
+
+def run_ripple_agent(state: AgentState) -> AgentState:
+    # Use the focus phrase from classify_intent; fall back to display_name
+    # when focus is empty or missing. Passing the raw query would leak
+    # imperative prefixes ("Show me the ripple tree for...") into the LLM's
+    # event_description input.
+    event_description = state.get("focus") or state["cfg"].display_name
+    tree = generate_ripple_tree(
+        event_description=event_description,
+        cfg=state["cfg"],
+        as_of=state["as_of"],
+    )
+    return {"ripple_tree": tree}

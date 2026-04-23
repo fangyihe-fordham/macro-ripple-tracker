@@ -54,3 +54,44 @@ def test_run_market_agent_returns_dict(monkeypatch):
     state = {"query": "how did oil move?", "cfg": cfg, "as_of": date(2026, 4, 15)}
     out = agent_supervisor.run_market_agent(state)
     assert out["market_data"] == fake_changes
+
+
+def test_run_ripple_agent_uses_focus(monkeypatch):
+    """When state["focus"] is populated, it becomes the event_description
+    passed to generate_ripple_tree — NOT the raw user query (which may
+    contain imperative prefixes like "Show me the ripple tree for...")."""
+    called = {}
+    def fake_generate(event_description, cfg, as_of, max_depth=3, news_top_k=3):
+        called["args"] = (event_description, cfg.name, as_of, max_depth)
+        return {"event": event_description, "nodes": []}
+    monkeypatch.setattr(agent_supervisor, "generate_ripple_tree", fake_generate)
+
+    cfg = load_event("iran_war")
+    from datetime import date
+    state = {"query": "Show me the ripple tree for Hormuz closure",
+             "focus": "Hormuz closure",
+             "cfg": cfg,
+             "as_of": date(2026, 4, 15)}
+    out = agent_supervisor.run_ripple_agent(state)
+    assert called["args"][0] == "Hormuz closure"
+    assert called["args"][1] == "iran_war"
+    assert out["ripple_tree"]["event"] == "Hormuz closure"
+
+
+def test_run_ripple_agent_falls_back_to_display_name(monkeypatch):
+    """When focus is empty or missing, fall back to cfg.display_name."""
+    called = {}
+    def fake_generate(event_description, cfg, as_of, max_depth=3, news_top_k=3):
+        called["args"] = (event_description,)
+        return {"event": event_description, "nodes": []}
+    monkeypatch.setattr(agent_supervisor, "generate_ripple_tree", fake_generate)
+
+    cfg = load_event("iran_war")
+    from datetime import date
+    state = {"query": "What industries are affected and why?",
+             "focus": "",
+             "cfg": cfg,
+             "as_of": date(2026, 4, 15)}
+    out = agent_supervisor.run_ripple_agent(state)
+    assert called["args"][0] == cfg.display_name
+    assert out["ripple_tree"]["event"] == cfg.display_name
