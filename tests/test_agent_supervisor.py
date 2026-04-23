@@ -140,3 +140,37 @@ def test_run_qa_agent_grounded_answer(monkeypatch):
     assert out["response"]["answer"].startswith("Brent hit $111")
     assert out["response"]["citations"][0]["url"] == "u1"
     assert len(out["news_results"]) == 1
+
+
+def test_build_graph_routes_by_intent(monkeypatch, fixtures_dir):
+    monkeypatch.setattr(agent_supervisor, "classify_intent",
+                        lambda s: {"intent": "market"})
+    monkeypatch.setattr(agent_supervisor, "run_market_agent",
+                        lambda s: {"market_data": {"BZ=F": {"pct_change": 49.6}}})
+    monkeypatch.setattr(agent_supervisor, "run_ripple_agent",
+                        lambda s: {"ripple_tree": {"touched": True}})
+    monkeypatch.setattr(agent_supervisor, "run_news_agent",
+                        lambda s: {"timeline": [{"touched": True}]})
+    monkeypatch.setattr(agent_supervisor, "run_qa_agent",
+                        lambda s: {"response": {"touched": True}})
+
+    app = agent_supervisor.build_graph()
+    cfg = load_event("iran_war")
+    from datetime import date
+    final = app.invoke({"query": "how did oil move?", "cfg": cfg, "as_of": date(2026, 4, 15)})
+    assert final["intent"] == "market"
+    assert "market_data" in final
+    assert "ripple_tree" not in final
+    assert "timeline" not in final
+
+
+def test_run_end_to_end_helper(monkeypatch):
+    monkeypatch.setattr(agent_supervisor, "classify_intent",
+                        lambda s: {"intent": "qa"})
+    monkeypatch.setattr(agent_supervisor, "run_qa_agent",
+                        lambda s: {"response": {"answer": "ok", "citations": []}})
+    cfg = load_event("iran_war")
+    from datetime import date
+    out = agent_supervisor.run(cfg, "what happened?", as_of=date(2026, 4, 15))
+    assert out["intent"] == "qa"
+    assert out["response"]["answer"] == "ok"

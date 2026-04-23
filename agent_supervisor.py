@@ -126,3 +126,38 @@ def run_qa_agent(state: AgentState) -> AgentState:
     except json.JSONDecodeError:
         answer = {"answer": text.strip(), "citations": []}
     return {"news_results": hits, "response": answer}
+
+
+def _route(state: AgentState) -> str:
+    return state.get("intent", "qa")
+
+
+def build_graph():
+    graph = StateGraph(AgentState)
+    graph.add_node("classify_intent", classify_intent)
+    graph.add_node("run_news_agent", run_news_agent)
+    graph.add_node("run_market_agent", run_market_agent)
+    graph.add_node("run_ripple_agent", run_ripple_agent)
+    graph.add_node("run_qa_agent", run_qa_agent)
+
+    graph.set_entry_point("classify_intent")
+    graph.add_conditional_edges(
+        "classify_intent",
+        _route,
+        {
+            "timeline": "run_news_agent",
+            "market": "run_market_agent",
+            "ripple": "run_ripple_agent",
+            "qa": "run_qa_agent",
+        },
+    )
+    graph.add_edge("run_news_agent", END)
+    graph.add_edge("run_market_agent", END)
+    graph.add_edge("run_ripple_agent", END)
+    graph.add_edge("run_qa_agent", END)
+    return graph.compile()
+
+
+def run(cfg: EventConfig, query: str, as_of: date) -> AgentState:
+    app = build_graph()
+    return app.invoke({"query": query, "cfg": cfg, "as_of": as_of})
