@@ -1,0 +1,10 @@
+[
+  ["What happened on March 2?", "timeline", ""],
+  ["Show me the key events in order.", "timeline", ""],
+  ["How did oil price react?", "market", "oil price reaction"],
+  ["What's the % change in Brent since the war started?", "market", "Brent price change"],
+  ["What industries are affected and why?", "ripple", ""],
+  ["Show me the ripple tree for Hormuz closure", "ripple", "Hormuz closure"],
+  ["Why did fertilizer prices go up?", "qa", "fertilizer price increase"],
+  ["Is there a link between Hormuz and aluminum?", "qa", "Hormuz and aluminum link"]
+]

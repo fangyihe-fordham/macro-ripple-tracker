@@ -1,0 +1,24 @@
+Classify the user query and extract its focus. Respond with ONLY a JSON object
+(no code fences, no prose):
+
+{"intent": "<one of: timeline | ripple | market | qa>", "focus": "<2-6 word noun phrase or empty string>"}
+
+Intents:
+- timeline: user wants a chronological list of key events
+- ripple:   user wants a multi-level industry impact / causal diagram
+- market:   user wants price changes / chart data for specific tickers or sectors
+- qa:       anything else — free-form question about the event, needs grounded answer
+
+Focus rules:
+- focus is a 2-6 word noun phrase describing the event or sub-topic the user
+  cares about. Examples: "Hormuz closure", "oil price reaction",
+  "fertilizer price increase".
+- Strip imperative verbs ("show me", "tell me", "draw", "what about"),
+  trailing question marks, and generic filler ("the ripple tree for",
+  "the impact of", "give me").
+- If the query is too vague to extract a focus (e.g. "what happened?",
+  "???"), return "focus": "" — downstream code falls back to the event's
+  display name.
+- Do NOT invent topics not present in the query. Prefer empty over guessed.
+
+Output JSON only. No code fences. No prose.
