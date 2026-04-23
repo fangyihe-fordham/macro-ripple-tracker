@@ -9,6 +9,14 @@ import feedparser
 from config import EventConfig
 
 
+# Order matters: script/style/comment blocks must be removed (content AND
+# wrapper) BEFORE tag stripping. A naive `<[^>]+>` strip would leave the
+# inner text — `<script>alert(1)</script>` → `alert(1)` — which is both
+# noise for the embedder and a prompt-injection surface for Plan 2's LLM
+# agents (user-controlled JS fragments masquerading as article text).
+_SCRIPT_RE = re.compile(r"<script\b[^>]*>.*?</script\s*>", re.IGNORECASE | re.DOTALL)
+_STYLE_RE = re.compile(r"<style\b[^>]*>.*?</style\s*>", re.IGNORECASE | re.DOTALL)
+_COMMENT_RE = re.compile(r"<!--.*?-->", re.DOTALL)
 _TAG_RE = re.compile(r"<[^>]+>")
 _WS_RE = re.compile(r"\s+")
 
@@ -22,7 +30,11 @@ def _strip_html(s: str) -> str:
     # Plan 2's LLM prompts get cleaner input if we strip tags + unescape entities.
     if not s:
         return ""
-    return _WS_RE.sub(" ", html.unescape(_TAG_RE.sub(" ", s))).strip()
+    s = _SCRIPT_RE.sub(" ", s)
+    s = _STYLE_RE.sub(" ", s)
+    s = _COMMENT_RE.sub(" ", s)
+    s = _TAG_RE.sub(" ", s)
+    return _WS_RE.sub(" ", html.unescape(s)).strip()
 
 
 def _matches_any(text: str, keywords: list[str]) -> bool:
