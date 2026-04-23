@@ -1,4 +1,11 @@
-"""ChromaDB wrapper + sentence-transformers embeddings (local, free)."""
+"""ChromaDB wrapper + sentence-transformers embeddings (local, free).
+
+Single-writer assumption: ChromaDB's persistent store has no locking of its
+own. `setup.py` takes an exclusive fcntl lock at `$DATA_DIR/setup.lock` for
+the duration of `reset()` + `index_articles()`. Readers (Plan 3 UI) should
+call `setup.is_setup_in_progress()` before firing up `retrieve()` to avoid
+racing a live rebuild.
+"""
 import hashlib
 import os
 import shutil

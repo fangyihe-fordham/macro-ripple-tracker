@@ -1,6 +1,10 @@
 import json
+import subprocess
+import sys
+import time
 
 import pandas as pd
+import pytest
 
 
 def test_setup_runs_end_to_end(tmp_data_dir, monkeypatch, fixtures_dir):
@@ -90,3 +94,47 @@ def test_setup_refresh_wipes_stale_prices_and_articles(tmp_data_dir, monkeypatch
     arts = json.loads(stale_arts.read_text())
     assert all(a["url"] != "stale" for a in arts)
     assert len(arts) == 1
+
+
+def test_setup_lock_blocks_concurrent_run(tmp_data_dir):
+    """A second setup.py run must fail fast while a first is holding the lock."""
+    import setup as setup_mod
+
+    assert setup_mod.is_setup_in_progress() is False
+
+    # Spawn a child Python that takes the lock and sleeps 3s.
+    holder = subprocess.Popen(
+        [
+            sys.executable,
+            "-c",
+            "import sys, os, time; "
+            f"os.environ['DATA_DIR']={str(tmp_data_dir)!r}; "
+            f"sys.path.insert(0, {str(tmp_data_dir.parent.parent)!r}); "
+            "import setup; "
+            "import fcntl; "
+            "fh = open(setup._lock_path(), 'w'); "
+            "fcntl.flock(fh.fileno(), fcntl.LOCK_EX); "
+            "print('LOCKED', flush=True); "
+            "time.sleep(3)",
+        ],
+        cwd="/Users/fangyihe/appliedfinance",
+        stdout=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        # Wait for the child to signal it's holding the lock.
+        line = holder.stdout.readline()
+        assert line.strip() == "LOCKED"
+        # Now the lock should register as busy.
+        assert setup_mod.is_setup_in_progress() is True
+        # And attempting to re-acquire it raises.
+        with pytest.raises(RuntimeError, match="Another setup.py run is in progress"):
+            with setup_mod._setup_lock():
+                pass
+    finally:
+        holder.terminate()
+        holder.wait(timeout=5)
+
+    # Once released, the lock is free again.
+    time.sleep(0.1)
+    assert setup_mod.is_setup_in_progress() is False
