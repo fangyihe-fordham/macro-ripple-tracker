@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Dict, List
 
 import chromadb
+from chromadb.errors import InvalidCollectionException
 from chromadb.utils import embedding_functions
 
 
@@ -37,7 +38,10 @@ def _collection(create: bool = True):
         return c.get_or_create_collection(_COLLECTION, embedding_function=_embedder())
     try:
         return c.get_collection(_COLLECTION, embedding_function=_embedder())
-    except Exception:
+    except InvalidCollectionException:
+        return None
+    except Exception as e:
+        print(f"[vector_store] unexpected error opening collection '{_COLLECTION}': {e!r}")
         return None
 
 
