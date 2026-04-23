@@ -609,3 +609,13 @@ Files touched:
 Expected commit: `feat(M2): % change vs baseline + price range query`
 
 After Task 4, continue with Task 5 (GDELT client, subagent) per the plan's mode mapping.
+
+---
+
+## Plan 3 UX decision to make (carryover from Plan 2 Tasks 11–12 review)
+
+`run_news_agent` and `run_qa_agent` currently degrade the "empty retrieval" case to:
+- News: `{news_results: [], timeline: []}`
+- QA: `{news_results: [], response: {answer: "No indexed articles match this question.", citations: []}}`
+
+These are jointly distinguishable from "LLM ran and produced empty output" via the fixed sentinel string + empty citations list, but Plan 3's UI cannot cleanly distinguish "setup.py hasn't run / collection empty" from "LLM couldn't find an answer in the snippets we gave it." When starting Plan 3, decide whether to add a `status: "no_retrieval" | "answered" | "no_answer"` field to both responses so the UI can render distinct empty-state cards ("Run setup.py" vs "Model found no answer in the data"). Not a Plan 2 bug — the degradation shapes are correct for programmatic consumers; just a Plan 3 UX call.

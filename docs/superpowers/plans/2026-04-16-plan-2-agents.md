@@ -1145,9 +1145,11 @@ Expected: FAIL with `AttributeError: ... 'run_news_agent'`
 Append to `agent_supervisor.py`:
 
 ```python
-import json
-from data_news import retrieve
-
+# Note: `strip_fences` was hoisted into `llm.py` during the Session-6 post-Task-8
+# refactor and is already imported at the top of agent_supervisor.py. This supersedes
+# the earlier inline `.strip().strip("\`").removeprefix("json").strip()` pattern.
+# `retrieve` is imported at module scope (see post-Task-13 cleanup) so tests can
+# monkeypatch `agent_supervisor.retrieve`.
 
 def run_news_agent(state: AgentState) -> AgentState:
     hits = retrieve(state["query"], top_k=20)
@@ -1164,9 +1166,9 @@ def run_news_agent(state: AgentState) -> AgentState:
     human = f"News snippets:\n{bullets}"
     llm = get_chat_model(temperature=0.1, max_tokens=2048)
     resp = llm.invoke([SystemMessage(content=system), HumanMessage(content=human)])
-    text = resp.content if isinstance(resp.content, str) else str(resp.content)
+    text = strip_fences(resp.content if isinstance(resp.content, str) else str(resp.content))
     try:
-        timeline = json.loads(text.strip().strip("`").removeprefix("json").strip())
+        timeline = json.loads(text)
     except json.JSONDecodeError:
         timeline = []
     return {"news_results": hits, "timeline": timeline}
@@ -1248,6 +1250,9 @@ Expected: FAIL with `AttributeError: ... 'run_qa_agent'`
 Append to `agent_supervisor.py`:
 
 ```python
+# Uses `strip_fences` from llm.py (hoisted in Session 6 post-Task-8 refactor).
+# Supersedes the earlier inline `.strip().strip("\`").removeprefix("json").strip()`.
+
 def run_qa_agent(state: AgentState) -> AgentState:
     hits = retrieve(state["query"], top_k=8)
     # retrieve() can legitimately return []; respecting the grounded-only
@@ -1266,9 +1271,9 @@ def run_qa_agent(state: AgentState) -> AgentState:
     human = f"Question: {state['query']}\n\nArticle snippets:\n{snippets}"
     llm = get_chat_model(temperature=0.1, max_tokens=1024)
     resp = llm.invoke([SystemMessage(content=system), HumanMessage(content=human)])
-    text = resp.content if isinstance(resp.content, str) else str(resp.content)
+    text = strip_fences(resp.content if isinstance(resp.content, str) else str(resp.content))
     try:
-        answer = json.loads(text.strip().strip("`").removeprefix("json").strip())
+        answer = json.loads(text)
     except json.JSONDecodeError:
         answer = {"answer": text.strip(), "citations": []}
     return {"news_results": hits, "response": answer}
