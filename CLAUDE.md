@@ -13,8 +13,8 @@ Applied Finance course project, v0.2. Agentic RAG that turns a macro/geopolitica
 All saved in `docs/superpowers/plans/`:
 
 - [`2026-04-16-plan-1-data-foundation.md`](docs/superpowers/plans/2026-04-16-plan-1-data-foundation.md) — **DONE + HARDENED (end of Session 4).** 12 tasks + 2 Session-3 infra follow-ups + 15 Session-4 hardening/cleanup commits (8 code-review-driven in Round 1, 6 user-directed in Round 2, 1 regression fix). All Plan 1 verification checklist items still green; live run delivers richer data (1,387 unique articles vs 1,217 in Session 3; retrieval top hit 0.533 vs 0.39).
-- [`2026-04-16-plan-2-agents.md`](docs/superpowers/plans/2026-04-16-plan-2-agents.md) — Not started but **reconciled** (Session 4, commit `35f46e2`) to match Plan 1's new `get_price_changes` `available` flag contract + `classify_intent` now returns `{intent, focus}` JSON with extracted event focus. 15 tasks.
-- [`2026-04-16-plan-3-ui-eval.md`](docs/superpowers/plans/2026-04-16-plan-3-ui-eval.md) — Not started. 12 tasks. M5 Streamlit 4-tab UI + §9 evaluation harness. **Plan 3 UI should call `setup.is_setup_in_progress()` before triggering `retrieve()` against ChromaDB** — see `vector_store.py` docstring and C4 lock commit `e5a84ad`.
+- [`2026-04-16-plan-2-agents.md`](docs/superpowers/plans/2026-04-16-plan-2-agents.md) — **DONE + REVIEWED (end of Session 6).** 15 tasks + 2 mid-plan code-review checkpoints (after Task 8 + after Task 13), each producing cleanup commits folded in before continuing. Plan 1 reconciliation (`35f46e2`) + Session-6 additions to plan file footer (`0.3.17` patch bump, `override=True` note, `strip_fences` hoist, Task-8 test snippet correction). Four deliberate deviations from plan text, all user-approved at decision time (see Session 6 progress.md). Suite: 53 passed + 4 skipped.
+- [`2026-04-16-plan-3-ui-eval.md`](docs/superpowers/plans/2026-04-16-plan-3-ui-eval.md) — Not started. 12 tasks. M5 Streamlit 4-tab UI + §9 evaluation harness. **Plan 3 UI should call `setup.is_setup_in_progress()` before triggering `retrieve()` against ChromaDB** — see `vector_store.py` docstring and C4 lock commit `e5a84ad`. **Plan 3 UI should import `llm.get_chat_model()` (not instantiate `ChatAnthropic` directly)** so it inherits Plan 2's `load_dotenv(override=True)` fix for the Claude-Desktop-empty-key quirk — see Library Quirks → `python-dotenv`. **Plan 3 UX decision**: `run_news_agent` / `run_qa_agent` empty-retrieval responses don't currently carry a `status` field; the UI cannot cleanly distinguish "setup.py hasn't run" from "LLM found no answer." Decide whether to add `status: "no_retrieval" | "answered" | "no_answer"` when drafting UI tabs — noted in `docs/progress.md` footer.
 
 Execute plans task-by-task. Each task = TDD cycle + a single `git commit`. Do not batch tasks into one commit.
 
@@ -49,6 +49,8 @@ When dispatching a subagent for an M1 task: pass the full task text from the pla
 
 For Plans 2 and 3: decide per-task after Plan 1 lands. Default to subagent for LLM-heavy code (agent_ripple, supervisor nodes), inline for UI tabs and eval modules (small and tightly coupled to user-visible behavior).
 
+**Plan 2 post-mortem (Session 6):** all 15 tasks were executed **inline**, not subagent. Rationale: each task built directly on the previous one's just-written interface (e.g. Task 7 orchestrator calls Tasks 4+5+6; Task 13 graph assembly wires Tasks 9+10+11+12), and the total surface was small (~3 production modules, ~300 lines). Subagent parallelism would have either (a) duplicated context for each task or (b) required careful handoff of the just-landed public API, both more expensive than running inline. **Plan 3 mode guidance (revised):** default to **inline** for UI tabs + eval harness tasks that share module state; subagent only for parallelizable independent work (e.g. one subagent per evaluation metric if they don't share a mock LLM setup).
+
 ## Git Convention
 
 - Single branch: `main`. No feature branches unless user asks.
@@ -69,7 +71,7 @@ Every task — inline or subagent — must clear all six before being declared d
 
 If a subagent returns green but any criterion above is unmet (e.g. extra files touched, hardcoded values, test-shaped decoration in production code), review and fix in a follow-up commit before moving on.
 
-## Current Directory Structure (real, end of Session 4 — Plan 1 hardened)
+## Current Directory Structure (real, end of Session 6 — Plan 2 done)
 
 ```
 /Users/fangyihe/appliedfinance/
@@ -77,12 +79,16 @@ If a subagent returns green but any criterion above is unmet (e.g. extra files t
 ├── README.md                     # data-source strategy + quickstart (added Session 4, R2-T2)
 ├── MacroRippleTracker_Spec_v0.2.docx
 ├── environment.yml               # conda spec
-├── requirements.txt              # pinned deps (yfinance 0.2.66; LangChain/LangGraph TBD Plan 2)
+├── requirements.txt              # pinned deps (yfinance 0.2.66 + langchain 0.3.7 / langchain-core 0.3.17 / langchain-anthropic 0.3.0 / langgraph 0.3.0 as of Session 6)
 ├── .gitignore                    # includes `.env` and `data/`
 ├── .env                          # gitignored — NEWSAPI_KEY, ANTHROPIC_API_KEY (both populated)
 ├── .env.example                  # committed template — same keys, empty values
-├── config.py                     # EventConfig pydantic (MUTABLE — tests can set cfg.field=...); load_event() calls load_dotenv() at import
-├── data_market.py                # M2: download_prices (returns List[str] missing), get_price_on_date, get_price_changes (now keyed by ALL tickers with `available` flag), get_price_range; _WARNED_MISSING one-shot log cache
+├── config.py                     # EventConfig pydantic (MUTABLE); load_event() calls load_dotenv() WITHOUT override (tests monkeypatch env vars before importing)
+├── llm.py                        # [NEW Session 6] ChatAnthropic factory pinned to claude-sonnet-4-6; strip_fences() utility; load_dotenv(override=True) — Claude Desktop can export empty ANTHROPIC_API_KEY
+├── agent_ripple.py               # [NEW Session 6] M3 three-phase ripple tree generator: generate_structure → attach_news → attach_prices; public entrypoint generate_ripple_tree()
+├── agent_supervisor.py           # [NEW Session 6] M4 LangGraph supervisor; AgentState TypedDict; 5 nodes (classify_intent + 4 workers); build_graph() + run(); late imports consolidated to top with monkeypatch-contract comment
+├── run.py                        # [NEW Session 6] CLI wrapper (argparse --event/--query/--as-of) → agent_supervisor.run() → JSON stdout
+├── data_market.py                # M2: download_prices, get_price_on_date, get_price_changes (always keyed by ALL cfg.tickers with `available` flag), get_price_range
 ├── setup.py                      # orchestrator CLI: fcntl-locked (setup.lock); --refresh wipes prices/+articles.json+chroma_db; exports is_setup_in_progress()
 ├── data_news/                    # M1 news package
 │   ├── __init__.py               # re-exports retrieve, index_articles, reset, read_articles, write_articles
@@ -92,6 +98,12 @@ If a subagent returns green but any criterion above is unmet (e.g. extra files t
 │   ├── dedup.py                  # URL dedup → MinHash LSH (threshold 0.95; returns (kept, stats))
 │   ├── store.py                  # articles.json read/write via DATA_DIR env var
 │   └── vector_store.py           # ChromaDB + MiniLM; telemetry logger silenced at module load; reset() clears SharedSystemClient cache; sha1 stable IDs
+├── prompts/                      # [NEW Session 6] file-backed prompts
+│   ├── __init__.py               # load(name) reads prompts/<name>.txt and .strip()s; used by agent_ripple + agent_supervisor
+│   ├── ripple_system.txt         # M3 ripple tree JSON schema prompt; {max_depth} placeholder filled by .replace() at call time
+│   ├── intent_system.txt         # M4 intent classifier — emits JSON {intent, focus}; "focus rules" strip imperative verbs
+│   ├── timeline_system.txt       # M4 news/timeline — emits JSON list of {date, headline, impact_summary}
+│   └── qa_system.txt             # M4 grounded QA — emits JSON {answer, citations}; cites snippet URLs only
 ├── events/
 │   └── iran_war.yaml             # RSS feeds deprecated (empty list) — GDELT covers same publications
 ├── data/                         # runtime, gitignored; populated by setup.py run
@@ -101,11 +113,11 @@ If a subagent returns green but any criterion above is unmet (e.g. extra files t
 │   ├── manifest.json             # event, snapshot_utc, article_count, source_counts, dedup, ticker_count, missing_tickers
 │   └── setup.lock                # fcntl lock file; presence + non-free state = setup.py is running
 ├── docs/
-│   ├── progress.md               # session log (Sessions 1–4)
+│   ├── progress.md               # session log (Sessions 1–6)
 │   └── superpowers/plans/
 │       ├── 2026-04-16-plan-1-data-foundation.md  # DONE + hardened
-│       ├── 2026-04-16-plan-2-agents.md           # next — RECONCILED Session 4 to match new contracts
-│       └── 2026-04-16-plan-3-ui-eval.md
+│       ├── 2026-04-16-plan-2-agents.md           # DONE + reviewed (Session 6)
+│       └── 2026-04-16-plan-3-ui-eval.md          # next
 └── tests/
     ├── __init__.py               # empty
     ├── conftest.py               # fixtures_dir, tmp_data_dir (sets DATA_DIR env)
@@ -119,17 +131,25 @@ If a subagent returns green but any criterion above is unmet (e.g. extra files t
     ├── test_vector_store.py      # 4 tests — +C3 surface-errors-not-silent-empty, +I5 stable-IDs-across-runs
     ├── test_setup_cli.py         # 3 tests — end-to-end + --refresh-wipes-stale + fcntl-lock-blocks-concurrent (subprocess-based)
     ├── test_smoke_live.py        # 2 tests, gated by RUN_LIVE=1 (real GDELT + yfinance SPY)
+    ├── test_llm.py               # [NEW Session 6] 3 tests — MODEL_ID, requires-API-key raise, returns-ChatAnthropic-class
+    ├── test_agent_ripple.py      # [NEW Session 6] 6 tests — structure parse/raise/fence-strip, attach_news recursion, attach_prices max-magnitude+fallback, end-to-end
+    ├── test_agent_supervisor.py  # [NEW Session 6] 10 tests — 8 classify_intent examples + 2 fallbacks; market passthrough; ripple focus-vs-display_name branch (x2); news timeline; QA citations; build_graph routing exclusivity; run() helper
+    ├── test_live_agents.py       # [NEW Session 6] 2 tests, gated by RUN_LIVE=1 (real Anthropic classify_intent + real generate_ripple_tree)
     └── fixtures/
         ├── yf_brent_sample.csv   # sample OHLCV for M2 tests
         ├── gdelt_response.json   # sample GDELT articles
         ├── newsapi_response.json # sample NewsAPI /v2/everything payload
-        └── rss_sample.xml        # 3-item RSS 2.0 feed (rss-3 now contains <p><a>...</a></p>&nbsp; to exercise _strip_html)
+        ├── rss_sample.xml        # 3-item RSS 2.0 feed (rss-3 now contains <p><a>...</a></p>&nbsp; to exercise _strip_html)
+        ├── ripple_llm_response.json  # [NEW Session 6] canned LLM JSON for M3 structure tests (3 top-level nodes; 2 children under Oil Supply)
+        └── intent_examples.json  # [NEW Session 6] 8 (query, intent, focus) tuples for M4 classify_intent sweep
 ```
 
-**Test counts:** 36 total → **34 pass + 2 gated-skip** (end of Session 4). 13 more tests than end-of-Session-3's 23.
+**Test counts:** 57 total → **53 pass + 4 gated-skip** (end of Session 6). 19 more tests than end of Session 4 (all Plan 2 additions; zero Plan-1 regressions).
 
-**Commits on `main` at end of Session 4 (newest first, session-4 additions bold):**
-**`35f46e2`** → **`862d263`** → **`33f88f5`** → **`0726337`** → **`90f02db`** → **`db8beb9`** → **`5fb2c8c`** → **`a1138b2`** → **`e5a84ad`** → **`15edf56`** → **`eba54a7`** → **`36a4d3d`** → **`62dbc4c`** → **`45b6157`** → **`c454c8b`** → **`ecd92fc`** → `aa2f3ea` → `fc3704c` → `3beabee` → `deb4650` → `0b69dbe` → `44e2d12` → `24adb51` → `3e25d3f` → `717d6c2` → `1c0793e` → `d1a23f2` → `b15ba33` → `c3e8fc0` → `60df2ee` → `b4e9fbe` → `d6a9519` → `178f0d0` → `1c5d7ed` → `77bfd0b` → `70e5bc9` → `1a4638a`.
+**Commits on `main` added in Session 6 (newest first, all 20 bolded as session-6 additions):**
+**`b245786`** (test: gated live) → **`db2c339`** (Task 14 run.py) → **`002d5de`** (plan snippet sync) → **`7464292`** (chore: import consolidation) → **`980cfad`** (Task 13) → **`14c6b56`** (Task 12) → **`5e4d5a5`** (Task 11) → **`0aabd63`** (Task 10) → **`907c5c0`** (Task 9) → **`f74284c`** (CLAUDE.md dotenv quirk) → **`3ff4548`** (refactor: strip_fences hoist) → **`1bba33a`** (plan-2 Task 8 snippet amend) → **`939e126`** (Task 8) → **`728b939`** (Task 7) → **`0db7a0d`** (Task 6) → **`f1f2b8b`** (Task 5) → **`b80d3b9`** (Task 4) → **`bb69ed6`** (Task 3) → **`4d61c68`** (Task 2 llm.py) → **`fdf78bf`** (Task 1 deps + prompt loader).
+
+**Pre-Session-6 commits on `main` (end of Session 5 → end of Session 4, newest first):** `1e70bdd` → `f47e757` → `35f46e2` → `862d263` → `33f88f5` → `0726337` → `90f02db` → `db8beb9` → `5fb2c8c` → `a1138b2` → `e5a84ad` → `15edf56` → `eba54a7` → `36a4d3d` → `62dbc4c` → `45b6157` → `c454c8b` → `ecd92fc` → `aa2f3ea` → `fc3704c` → `3beabee` → `deb4650` → `0b69dbe` → `44e2d12` → `24adb51` → `3e25d3f` → `717d6c2` → `1c0793e` → `d1a23f2` → `b15ba33` → `c3e8fc0` → `60df2ee` → `b4e9fbe` → `d6a9519` → `178f0d0` → `1c5d7ed` → `77bfd0b` → `70e5bc9` → `1a4638a`.
 
 **Live-run baseline (last full `setup.py --refresh` against real APIs, end of Session 4):**
 - GDELT: 1,750 (7 chunks, all succeeded this time; rate-limit hits are session-dependent and recovered-by-design).
@@ -165,7 +185,7 @@ If a subagent returns green but any criterion above is unmet (e.g. extra files t
 
 If the user asks for any of the above mid-stream, flag the scope conflict before implementing.
 
-## Conventions Established in Tasks 1–5 (+ Session 4 hardening)
+## Conventions Established in Tasks 1–5 (+ Session 4 hardening + Session 6 Plan 2)
 
 ### Python
 
@@ -174,6 +194,8 @@ If the user asks for any of the above mid-stream, flag the scope conflict before
 - **pydantic models are MUTABLE by default** (v2 unless `model_config = ConfigDict(frozen=True)`). `EventConfig` is not frozen → tests can do `cfg = load_event("iran_war"); cfg.rss_feeds = ["..."]` to inject synthetic values instead of constructing a throwaway model. Session 4's `test_rss.py` relies on this after `iran_war.yaml` deprecated its RSS feeds. DO NOT add `frozen=True` to `EventConfig` without checking which tests mutate fields.
 - **No comments** unless the *why* is non-obvious. Load-bearing comments in the codebase now explain (a) weekend gaps in market data tests, (b) `config.py` calling `load_dotenv()` at import time, (c) GDELT `query_params` introspection, (d) yfinance `multi_level_index=False` flag, (e) `_WARNED_MISSING` one-shot log cache, (f) `chromadb` posthog-logger suppression, (g) `SharedSystemClient.clear_system_cache()` after `rmtree`, (h) NewsAPI 100-total-cap rationale in the pagination loop. If you add a comment, match that register.
 - **`DATA_DIR` env var** isolates the runtime data directory (`data/` by default). Every module that reads/writes files under `data/` **must** resolve via `Path(os.environ.get("DATA_DIR", "data"))` — the `tmp_data_dir` pytest fixture depends on this for isolation. Session-4-added targets under `$DATA_DIR`: `setup.lock` (fcntl lock file) in addition to the existing `articles.json`, `prices/`, `chroma_db/`, `manifest.json`.
+- **Session 6 — LLM module imports at top with monkeypatch-contract guard comment.** `agent_supervisor.py:11-16` imports `from agent_ripple import generate_ripple_tree`, `from data_market import get_price_changes`, `from data_news import retrieve` at module scope (not inside functions). Tests rely on these bindings being present on the module, so `monkeypatch.setattr(agent_supervisor, "retrieve", ...)` works. The guard comment explicitly says: "Do NOT refactor to `import data_market` + `data_market.get_price_changes(...)` inside functions — that would break every monkeypatch in test_agent_supervisor.py." If you consolidate imports in any future file that uses the same test pattern, preserve `from X import Y` form, not `import X`.
+- **Session 6 — TypedDict with `total=False` for LangGraph state.** `agent_supervisor.AgentState(TypedDict, total=False)` declares all keys Optional so workers can return partial state deltas (e.g. `{"market_data": changes}`) without type-checker pain. LangGraph merges the deltas into full state. Don't "fix" return annotations to `Dict` or introduce `Partial[T]` — the current form is idiomatic LangGraph.
 
 ### Filenames / ticker sanitization
 
@@ -191,6 +213,17 @@ CSVs under `data/prices/` are named via `symbol.replace("=", "_").replace("^", "
   - `get_price_range(symbol, start, end) -> pd.Series` — returns EMPTY `pd.Series(dtype=float)` for BOTH missing CSV and empty date window. Callers must `.empty` check.
 - **Boundary try/except must be PER-ITERATION, not whole-body, when accumulating state.** Session 4 had a regression where `newsapi_fetcher.fetch()`'s whole-body `try/except Exception: return []` discarded page-1's 100 articles when page 2 raised. Fixed (`862d263`) by moving try/except INSIDE the page loop and `break`ing on `NewsAPIException` with `code=='maximumResultsReached'`. Rule of thumb: if you already appended to `results`, don't throw it away because a later iteration fails.
 - **Silence external library log spam at the logger level, not via settings flags.** `chromadb==0.5.18`'s `Settings(anonymized_telemetry=False)` does NOT prevent the telemetry `capture()` call from firing — the call fires, fails with a signature mismatch, and logs ERROR via `chromadb.telemetry.product.posthog`. Only reliable fix: `logging.getLogger("chromadb.telemetry.product.posthog").setLevel(logging.CRITICAL)`. Documented in "Library Quirks → chromadb" below.
+- **Session 6 — LLM error handling is asymmetric by role and deliberate.**
+  - **`agent_ripple.generate_structure` raises `ValueError("Model did not return valid JSON: ...")`** on parse failure. Rationale: ripple-tree generation is stateless and on demand; a malformed LLM response is worth surfacing loudly so the UI shows an error state rather than a hallucinated structure.
+  - **`agent_supervisor.classify_intent` NEVER raises** — on `json.JSONDecodeError` or invalid intent value, it returns `{"intent": "qa", "focus": ""}` (graceful degradation to the safest worker). Rationale: this runs in the graph's request path; any raise here would bubble out of `app.invoke(...)` and crash `run.py` / `app.py`.
+  - **`agent_supervisor.run_news_agent` on `json.JSONDecodeError` → `timeline = []`.** Soft degradation; UI renders empty timeline.
+  - **`agent_supervisor.run_qa_agent` on `json.JSONDecodeError` → `{"answer": text.strip(), "citations": []}`.** Soft degradation; UI shows the LLM's raw text as the answer with no citations.
+  - **DO NOT make all four symmetric** — the different failure modes are by design.
+- **Session 6 — empty-retrieval short-circuit contract.** `data_news.retrieve()` returns `[]` when the Chroma collection is missing or empty (Plan 1 C3, `vector_store.py:108`). Every LLM-calling consumer MUST check for this and either skip the LLM call or return a deterministic degraded response:
+  - `run_news_agent`: `{"news_results": [], "timeline": []}`.
+  - `run_qa_agent`: `{"news_results": [], "response": {"answer": "No indexed articles match this question.", "citations": []}}`.
+  - `attach_news` (agent_ripple): naturally safe — empty-list iteration attaches `supporting_news=[]` to each node; no explicit check needed.
+  - **Rationale:** an LLM prompted with an empty snippet list will hallucinate. The short-circuit is the honest response.
 
 ### Tests
 
@@ -212,6 +245,23 @@ CSVs under `data/prices/` are named via `symbol.replace("=", "_").replace("^", "
 - **`capsys` captures stdout `print()`, not Python `logging` records.** Session 4's C3 test uses `capsys.readouterr().out` to assert on `[vector_store] unexpected error ...` because the error goes through `print()`, not `logging`. If we ever switch `vector_store.py` from `print` to `logger.error`, tests must switch to `caplog` — and callers won't see the messages without a handler.
 - **Concurrent-state tests use `subprocess.Popen`, not threads.** `tests/test_setup_cli.py::test_setup_lock_blocks_concurrent_run` spawns a child Python that acquires the fcntl lock and sleeps. Tests reading the lock's "busy" state from the parent process work because fcntl.flock is advisory AND per-process. In-process concurrency (threads) wouldn't exercise the lock — POSIX locks ignore same-process holders' requests. If you ever write a lock-contention test differently, it's probably wrong.
 - **Tests requiring real ChromaDB writes must not reset() twice in-process without verifying the cache-clear path.** `reset()` now calls `SharedSystemClient.clear_system_cache()`; without that, the second `index_articles()` hits `sqlite3.OperationalError: attempt to write a readonly database`. See Library Quirks → chromadb.
+- **LLM test fakes: use a SHARED `_FakeLLM` instance, not a factory.** A `lambda **kw: _FakeLLM(replies)` builds a FRESH fake on every `get_chat_model()` call, with a FRESH copy of `replies` (via `self._replies = list(replies)` in `_FakeLLM.__init__`). If a test iterates and expects `.pop(0)` to advance, that pattern fails because each iteration sees `replies[0]` again. Correct pattern (discovered Session 6 on Plan 2 Task 8):
+  ```python
+  class _FakeLLM:
+      def __init__(self, replies):
+          self._replies = list(replies)
+      def invoke(self, messages):
+          return AIMessage(content=self._replies.pop(0))
+
+  replies = [json.dumps({...}) for ... in examples]
+  fake = _FakeLLM(replies)  # ONE instance
+  monkeypatch.setattr(module, "get_chat_model", lambda **kw: fake)
+  for example in examples:
+      ...  # each call advances through `replies`
+  ```
+  **If the test only invokes the LLM once per test function**, `lambda **kw: _FakeLLM([reply])` is fine (single-shot). It's specifically the "iterate-and-pop" pattern that requires sharing.
+- **`monkeypatch.setattr(agent_supervisor, "retrieve", ...)` requires `retrieve` to be a module-level name in `agent_supervisor`.** Session 6 consolidated the late `from data_news import retrieve` / `from data_market import get_price_changes` / `from agent_ripple import generate_ripple_tree` imports to the top of `agent_supervisor.py`, with a guard comment (`agent_supervisor.py:11-16`). Do NOT "simplify" to `import data_news` + `data_news.retrieve(...)` inside the function — that would break every monkeypatch in `test_agent_supervisor.py` silently, because `monkeypatch.setattr(agent_supervisor, "retrieve", ...)` would set a new module-level attr that the function's `data_news.retrieve(...)` would ignore.
+- **LangGraph tests that patch node functions must do so BEFORE calling `build_graph()`.** `add_node(name, callable)` captures the callable at build time. If you patch after, the compiled app still holds the unpatched reference. `test_build_graph_routes_by_intent` and `test_run_end_to_end_helper` both patch-then-build; this is the correct order.
 
 ### yfinance specifics
 
@@ -327,6 +377,34 @@ Things to know:
 - **`entry.summary` is raw HTML, always.** Even well-behaved feeds return `<p>…<a href=…>…</a></p>` and `&amp;` / `&nbsp;` entities. Our `_strip_html` in `data_news/rss.py` removes `<script>`, `<style>`, `<!-- -->` blocks INCLUDING their content (case-insensitive, multiline) BEFORE generic tag-strip, then `html.unescape`. Order matters: if you tag-strip first, `<script>alert(1)</script>` becomes `alert(1)` in the snippet — both noise for MiniLM and prompt-injection for Plan 2. Tests: `test_strip_html_removes_script_style_and_comments`, `test_strip_html_case_insensitive_and_spanning_newlines`. **DO NOT "simplify" to a single `<[^>]+>` regex** — that's the pre-Session-4 bug.
 - The module still exists (`data_news/rss.py`) as a skeleton for future RSS re-introduction. `setup.py` still calls it (returns `[]` when `cfg.rss_feeds` is empty). Tests inject `cfg.rss_feeds = ["..."]` to exercise the fetch path.
 
+### `langchain==0.3.7` / `langchain-core==0.3.17` / `langchain-anthropic==0.3.0` / `langgraph==0.3.0` (Session 6)
+
+- **The `langchain-core` pin you want is `0.3.17`, NOT `0.3.15`.** `langchain-anthropic==0.3.0` has a minimum floor of `langchain-core>=0.3.17`; the plan's `0.3.15` pin caused `pip install -r requirements.txt` to return `ResolutionImpossible`. Session 6 bumped by one patch; see plan file "Execution Notes (Session 6)" footer and `requirements.txt`. If a future upgrade bumps `langchain-anthropic`, re-check the `langchain-core` floor.
+- **`ChatAnthropic.invoke([SystemMessage, HumanMessage, ...])` returns an `AIMessage`** whose `.content` is EITHER `str` (plain text replies) OR `List[Dict]` (tool-calling / vision). Our three LLM call sites (`agent_ripple.generate_structure`, `agent_supervisor.classify_intent`, `agent_supervisor.run_news_agent`, `agent_supervisor.run_qa_agent`) all do `resp.content if isinstance(resp.content, str) else str(resp.content)`. This is correct for current pure-text usage. If Plan 3 ever adds tool-calling, `str(list_of_blocks)` produces `"[{'type': 'text', 'text': '...'}]"` which `json.loads` will reject — switch those call sites to extract the text block explicitly. Not a bug today; flag for Plan 3.
+- **Prompt-file placeholders use `.replace("{var}", value)`, not `.format()`.** `prompts/ripple_system.txt` has `{max_depth}` which is filled by `load_prompt("ripple_system").replace("{max_depth}", str(max_depth))` in `agent_ripple.generate_structure`. Rationale: `.format()` breaks on any other `{...}` literal in the prompt (there are many, since the prompt documents a JSON schema full of `{`/`}`). If you add more placeholders, either switch to `str.format(**kwargs)` AND escape every schema `{` as `{{`, or keep chaining `.replace()`. Stick with `.replace()`; it's a three-line footgun to switch.
+- **`strip_fences` lives in `llm.py`, not each agent module.** Session 6's post-Task-8 refactor hoisted it from `agent_ripple.py` + `agent_supervisor.py` into `llm.py`. All four LLM call sites (`generate_structure`, `classify_intent`, `run_news_agent`, `run_qa_agent`) import `from llm import ..., strip_fences`. The plan file's older Tasks 11/12 snippets used `.strip().strip("\`").removeprefix("json").strip()` — that pattern was retired; use `strip_fences`. If Plan 3 adds another LLM-JSON caller, reuse `strip_fences` — do NOT reinvent.
+- **`strip_fences` regex:** `re.compile(r"^```(?:json)?\s*|\s*```$", re.MULTILINE)`. Handles the canonical `\n\`\`\`json\n...\n\`\`\`\n` form. Empirically brittle on pathological inputs like `\`\`\`json{"x":1}\`\`\`` (all one line, no newline before closing fence) — the `$` anchor with MULTILINE matches line end, so this case works, but `{"x":1}\`\`\`\n` (closing fence only, no opening) with no trailing whitespace at string end might leave the fence unmatched. Claude Sonnet 4.6 reliably emits the canonical form; not a worry today. If you ever see JSON parse errors in prod on LLM output that looked fenced, the regex is the first place to check.
+
+### `langgraph==0.3.0` — StateGraph specifics (Session 6)
+
+- **`graph.add_node(name, callable)` captures the callable reference AT `add_node` TIME, not at graph invocation time.** `agent_supervisor.build_graph()` does `graph.add_node("classify_intent", classify_intent)` — the `classify_intent` reference is resolved and bound then and there. `tests/test_agent_supervisor.py::test_build_graph_routes_by_intent` works because `monkeypatch.setattr(agent_supervisor, "classify_intent", ...)` runs BEFORE `build_graph()`, so `add_node` captures the patched reference. **Consequence:** never cache a compiled app as a module-level singleton (`_APP = build_graph()` at import time) — doing so would freeze stale callable references and silently break every monkeypatch-based test. Documented in-line at `build_graph`; also in `agent_supervisor.py` top-of-file import guard comment.
+- **Node functions return PARTIAL `AgentState` dicts, and LangGraph merges them into the full state.** `AgentState` is declared `TypedDict(total=False)`, so `return {"market_data": changes}` IS a valid `AgentState` — mypy/pyright won't complain. Every worker node (`run_market_agent`, `run_ripple_agent`, `run_news_agent`, `run_qa_agent`) and `classify_intent` annotate `-> AgentState` but return partials. This is idiomatic LangGraph; don't "fix" the return type to `Dict` or `Partial[AgentState]`.
+- **Conditional routing: `add_conditional_edges(from_node, route_fn, {intent_str: to_node})`.** Our `_route(state)` returns `state.get("intent", "qa")` — the default-to-qa is a genuine safety net: `classify_intent`'s fallback path ALSO returns `intent="qa"`, so the default only fires if a future node mutates state without setting intent. Keep the `.get(..., "qa")` form.
+- **`app.invoke(initial_state)` returns the final merged state**; unvisited branches' keys are absent (`"ripple_tree" not in final` when intent was market). Test `test_build_graph_routes_by_intent` asserts both presence and exclusion — if a future refactor changes LangGraph merge semantics (e.g. always-runs-all-nodes), this test fails loudly.
+- **Classes of things LangGraph WILL NOT do for us:**
+  - retry failed node invocations (Plan 2 currently doesn't need; evaluate for Plan 3 eval runner).
+  - stream node outputs (use `app.stream(...)` not `app.invoke(...)` if Plan 3 UI wants progressive updates).
+  - cache results across invocations (every `run()` call rebuilds the graph via `build_graph()`; cheap but not free — ~10ms per invocation).
+
+### `python-dotenv==1.0.1` — Claude-Desktop-shadows-env-var quirk (Session 6)
+
+- **Claude Desktop exports `ANTHROPIC_API_KEY=` (empty string) into child processes.** `load_dotenv()` without `override=True` treats an empty string as "already set" and does NOT replace it from `.env`. Symptom: `os.environ.get("ANTHROPIC_API_KEY")` returns `""` (falsy) even though `.env` has a real key populated. Session 6 discovered this on Task 1 Step 4. Fix is module-specific:
+  - **`llm.py` calls `load_dotenv(override=True)`** (live LLM entrypoint, needs the real key).
+  - **`config.py` calls `load_dotenv()` WITHOUT override** (tests `monkeypatch.setenv(...)` before importing config — `override=True` there would fight the monkeypatch).
+- **If Plan 3 adds a third live entrypoint** (e.g. `app.py` Streamlit runner), decide per-file: override if it's a user-facing live path that needs the key at import, no override if tests inject the key before import.
+- **Symptom identification heuristic:** if `/opt/anaconda3/envs/macro-ripple/bin/python -c "import config, os; print(os.environ.get('ANTHROPIC_API_KEY'))"` prints empty string, AND `awk -F= '/ANTHROPIC_API_KEY/ {print substr($2,1,15)}' .env` prints `sk-ant-api03-...`, AND `env | grep ANTHROPIC_API_KEY` shows `ANTHROPIC_API_KEY=` (empty), you are hitting this quirk. Running via Claude Desktop is the cause; running from a fresh shell (no Claude Desktop parent) works fine.
+- **Do NOT "fix" by removing the empty ANTHROPIC_API_KEY from the shell export** — it's part of Claude Desktop's launch environment and can't be changed per-project. Use the per-file `override=True` strategy instead.
+
 ## Secrets & Environment
 
 - **`.env` lives at the repo root**, is gitignored (line 7 of `.gitignore`), and holds `NEWSAPI_KEY` and `ANTHROPIC_API_KEY` (both present as of Session 2). Populated file format:
@@ -371,22 +449,26 @@ Green tests from a subagent are *necessary but not sufficient*. Before accepting
 ## How to Resume
 
 1. `cd /Users/fangyihe/appliedfinance`
-2. Read this file (`CLAUDE.md`) and [`docs/progress.md`](docs/progress.md) for what happened last session. As of end-of-Session-4, the active plan is Plan 2.
-3. Read the active plan file. Next task is listed in `progress.md` under "Next session — exact next step". Session 4's reconciled Plan 2 file is the source of truth — **do not read an older copy**.
+2. Read this file (`CLAUDE.md`) and [`docs/progress.md`](docs/progress.md) for what happened last session. **As of end-of-Session-6, the active plan is Plan 3.** Session 6 landed 20 commits completing Plan 2 end-to-end (see progress.md Session 6 entry).
+3. Read the active plan file: [`docs/superpowers/plans/2026-04-16-plan-3-ui-eval.md`](docs/superpowers/plans/2026-04-16-plan-3-ui-eval.md). 12 tasks; M5 Streamlit 4-tab UI + §9 evaluation harness.
 4. Sanity-check the environment:
-   - `/opt/anaconda3/envs/macro-ripple/bin/pytest -v` → **34 passed, 2 skipped** (end of Session 4). The 2 skipped are the `RUN_LIVE=1`-gated smoke probes in `tests/test_smoke_live.py`.
-   - `/opt/anaconda3/envs/macro-ripple/bin/python -c "import config, os; print(bool(os.environ.get('NEWSAPI_KEY')), bool(os.environ.get('ANTHROPIC_API_KEY')))"` → `True True`. If either is `False`, check that `.env` at the repo root has both keys populated (no quotes, no spaces around `=`).
+   - `/opt/anaconda3/envs/macro-ripple/bin/pytest -v` → **53 passed, 4 skipped** (end of Session 6). The 4 skipped are `RUN_LIVE=1`-gated: 2 in `tests/test_smoke_live.py` (Plan 1) and 2 in `tests/test_live_agents.py` (Plan 2).
+   - `/opt/anaconda3/envs/macro-ripple/bin/python -c "import config, os; print(bool(os.environ.get('NEWSAPI_KEY')), bool(os.environ.get('ANTHROPIC_API_KEY')))"` — note that under Claude Desktop, this may print `True False` because the parent shell exports `ANTHROPIC_API_KEY=` (empty) which shadows `.env`. That's only a problem for live runs, not unit tests. To verify the real key is present: `awk -F= '/ANTHROPIC_API_KEY/ {print substr($2,1,15)}' .env` should show `sk-ant-api03-...`. See Library Quirks → `python-dotenv` if you hit this.
    - `git status --short` → clean. If `.env` appears here as untracked, verify it's still ignored by `.gitignore` (line 7) — do NOT stage it.
-   - Optional — verify the Plan-1 data is fresh enough for Plan 2 to consume: `ls -la data/manifest.json`. If stale or missing, run `/opt/anaconda3/envs/macro-ripple/bin/python setup.py --event iran_war --refresh` (takes ~30–60s, hits live GDELT + NewsAPI + yfinance).
+   - Optional — verify the Plan-1 data is fresh enough for Plan 2/3 to consume: `ls -la data/manifest.json`. If stale or missing, run `/opt/anaconda3/envs/macro-ripple/bin/python setup.py --event iran_war --refresh` (takes ~30–60s, hits live GDELT + NewsAPI + yfinance).
+   - Optional live Plan-2 smoke: `/opt/anaconda3/envs/macro-ripple/bin/python run.py --event iran_war --query "How did oil react to Hormuz closure?"`. This hits the Anthropic API; expect a JSON blob with `intent`, `market_data` / `response` / `ripple_tree` / `timeline` depending on classification.
 5. Start the next task per the mode mapping in "Working Mode". If dispatching a subagent, paste the plan task text inline in the brief — do not hand it the plan file. Include "Library Quirks" entries relevant to the task in the subagent's brief.
 6. Before declaring the task done, walk the six Acceptance Criteria plus the Subagent Review Checklist (if applicable).
 
-### Pre-Plan-2 specific notes
+### Pre-Plan-3 specific notes
 
-- **API contracts Plan 2 must respect** (Session 4 changes — Plan 2 markdown already reconciled, commit `35f46e2`):
-  - `data_market.get_price_changes(cfg, as_of)` ALWAYS returns every `cfg.tickers` symbol, each entry is `{"available": bool, "baseline": Optional[float], "latest": Optional[float], "pct_change": Optional[float]}`. No KeyErrors; check `available` before reading `pct_change`.
-  - `data_news.dedup.deduplicate(...)` returns `(kept, stats)` — a TUPLE, not a list. Plan 2 probably won't call this but setup.py does.
-  - `data_news.retrieve(query, top_k)` unchanged — returns list of `{text, url, headline, metadata, score}`.
-  - `setup.is_setup_in_progress() -> bool` — new helper for gating concurrent access.
-- **Plan 2 Task 1 has two sub-steps to SKIP**: `.env.example` already exists (Session 2), `.env` already populated. Only append to `requirements.txt` + create `prompts/__init__.py`. Plan 2's reconciled text marks these.
-- **Library pins Plan 2 Task 1 will add:** `langchain==0.3.7`, `langchain-core==0.3.15`, `langchain-anthropic==0.3.0`, `langgraph==0.3.0`. The `langchain-anthropic==0.2.4` + `langgraph==0.2.50` in current `requirements.txt` are bumped to 0.3.0 — safe because nothing in Plan 1 imports them, but IS a version change in a working env. Flag to user before `pip install -r requirements.txt`.
+- **API contracts Plan 3 must respect** (Session 6 Plan 2 surfaces Plan 3 will consume):
+  - `agent_supervisor.run(cfg, query, as_of) -> AgentState` — returns a partial dict whose populated keys DEPEND on the classified intent. Plan 3 UI must branch on `final["intent"]` ("timeline" → `timeline`+`news_results` keys; "market" → `market_data`; "ripple" → `ripple_tree`; "qa" → `response`+`news_results`). Do not assume all keys are present.
+  - `agent_supervisor.classify_intent({"query": str}) -> {"intent": ..., "focus": ...}` — Plan 3 eval (§9) may want to call this directly to measure classification accuracy vs the labeled `intent_examples.json` sweep.
+  - `agent_ripple.generate_ripple_tree(event_description, cfg, as_of, max_depth=3, news_top_k=3) -> Dict` — produces a tree where every node has `supporting_news: List[Dict]` and `price_change: Optional[float]` + `price_details: List[Dict]`. Empty `supporting_news=[]` means `retrieve()` returned empty hits (setup.py likely not run). Plan 3 UI needs to distinguish this from "no citations worth showing".
+  - `llm.get_chat_model(temperature, max_tokens) -> ChatAnthropic` — always use this instead of importing `ChatAnthropic` directly, so the UI inherits the `load_dotenv(override=True)` fix.
+  - `llm.strip_fences(s: str) -> str` — reuse for any Plan-3 code that parses LLM JSON output (eval harness, refinement loops). Do not roll a new fence-stripper.
+  - `setup.is_setup_in_progress() -> bool` — Plan 3 UI MUST call this before firing any `retrieve()`, to avoid racing a setup.py rebuild. Returns True only while another process holds the `$DATA_DIR/setup.lock` fcntl lock.
+- **Plan 3 UX decision to make (M1/M2 from code review):** `run_news_agent` / `run_qa_agent` empty-retrieval responses don't carry a distinct `status` field. UI can't distinguish "setup.py hasn't run" from "LLM couldn't find an answer." Consider adding `status: "no_retrieval" | "answered" | "no_answer"` when drafting UI tabs — or accept the current jointly-distinguishable shape. Noted at bottom of `docs/progress.md`.
+- **Model-ID currency check:** `llm.MODEL_ID = "claude-sonnet-4-6"`. Before running Plan 3 §9 evaluation, confirm this is still the current-generation Sonnet. A model bump is a one-line change but invalidates the quality baselines — re-run eval scripts after any bump.
+- **Historical reference corpus (Week-2 add-on, NOT Plan 3 but adjacent):** `events/historical_reference/` for the 1979 + 1990-91 oil shocks. Curated markdown files, loaded by M3 at generation time as few-shot priors. If Plan 3 adds groundwork for this (e.g. a loader stub), flag it explicitly — it's outside MVP scope.

@@ -1,5 +1,118 @@
 # Progress Log
 
+## Session 6 — 2026-04-23 (evening) — Plan 2 execution (M3 Ripple + M4 Supervisor)
+
+**Model:** Claude Opus 4.7 (1M context) via Claude Code CLI.
+**Scope:** Executed Plan 2 Tasks 1–15 end-to-end. Two mid-plan code-review checkpoints (after Task 8, after Task 13) dispatched via `superpowers:code-reviewer`; both returned zero Critical issues and surfaced 3 Important + minor cleanups that were folded in before continuing. Plan 2 is **DONE + REVIEWED**. Test count moved from 34 passed + 2 skipped (start of session) to **53 passed + 4 skipped** (end of session).
+
+**Commit count:** 20 on `main`. 15 plan tasks + 3 mid-plan review cleanups + 2 doc sync commits.
+
+### Commits landed (oldest → newest, branch `main`)
+
+| # | Commit | Type | Task / Role |
+|---|---|---|---|
+| 1 | `fdf78bf` | chore | Task 1 — deps + `prompts/__init__.py` prompt loader |
+| 2 | `4d61c68` | feat | Task 2 — `llm.py` `get_chat_model()` factory pinned to `claude-sonnet-4-6` |
+| 3 | `bb69ed6` | feat(M3) | Task 3 — `prompts/ripple_system.txt` + fixture `ripple_llm_response.json` |
+| 4 | `b80d3b9` | feat(M3) | Task 4 — `generate_structure` (LLM → JSON tree) |
+| 5 | `f1f2b8b` | feat(M3) | Task 5 — `attach_news` (retrieve per node) |
+| 6 | `0db7a0d` | feat(M3) | Task 6 — `attach_prices` (ticker_hints → pct_change) |
+| 7 | `728b939` | feat(M3) | Task 7 — `generate_ripple_tree` orchestrator |
+| 8 | `939e126` | feat(M4) | Task 8 — `agent_supervisor.AgentState` + `classify_intent` JSON-`{intent,focus}` |
+| 9 | `1bba33a` | docs | Post-Task-8 review cleanup: amend plan Task 8 snippet; record `load_dotenv` override note in plan footer |
+| 10 | `3ff4548` | refactor(M3,M4) | Post-Task-8 review cleanup: hoist `strip_fences` into `llm.py`, import into both agents, PEP-8 import order in `agent_ripple.py` |
+| 11 | `f74284c` | docs(CLAUDE.md) | Post-Task-8 review cleanup: document Claude Desktop empty-`ANTHROPIC_API_KEY` quirk + `llm.py`/`config.py` asymmetry |
+| 12 | `907c5c0` | feat(M4) | Task 9 — `run_market_agent` |
+| 13 | `0aabd63` | feat(M4) | Task 10 — `run_ripple_agent` (uses `state["focus"]`, falls back to `cfg.display_name`) |
+| 14 | `5e4d5a5` | feat(M4) | Task 11 — `run_news_agent` + `prompts/timeline_system.txt` |
+| 15 | `14c6b56` | feat(M4) | Task 12 — `run_qa_agent` + `prompts/qa_system.txt` |
+| 16 | `980cfad` | feat(M4) | Task 13 — `build_graph` (StateGraph) + `run()` helper |
+| 17 | `7464292` | chore(M4) | Post-Task-13 review cleanup: consolidate late imports to top of `agent_supervisor.py` with monkeypatch-contract comment; drop unused `get_price_range` import; document `add_node` callable-capture semantic on `build_graph` |
+| 18 | `002d5de` | docs | Post-Task-13 review cleanup: update plan Tasks 11/12 snippets to use `strip_fences(...)`; append Plan-3 UX decision note to `progress.md` |
+| 19 | `db2c339` | feat | Task 14 — `run.py` CLI (argparse, JSON-stdout) |
+| 20 | `b245786` | test | Task 15 — `tests/test_live_agents.py` (RUN_LIVE-gated, 2 tests) |
+
+### (1) What was completed
+
+Plan 2 Tasks 1–15 in full, with all six CLAUDE.md Acceptance Criteria satisfied per commit. Concrete surface:
+
+**New production modules (event-agnostic; no hardcoded Iran/Hormuz/BZ=F strings):**
+- [`llm.py`](llm.py) — `get_chat_model()` factory, `MODEL_ID="claude-sonnet-4-6"`, `strip_fences()` utility. Uses `load_dotenv(override=True)` to bypass Claude Desktop's empty-`ANTHROPIC_API_KEY` export (see CLAUDE.md Library Quirks → dotenv).
+- [`agent_ripple.py`](agent_ripple.py) — M3 three-phase generator: `generate_structure` (LLM) → `attach_news` (per-node `retrieve()`) → `attach_prices` (per-node `ticker_hints` → `get_price_changes[sym].pct_change`). Public entrypoint `generate_ripple_tree(event_description, cfg, as_of, max_depth=3, news_top_k=3)`.
+- [`agent_supervisor.py`](agent_supervisor.py) — M4 LangGraph supervisor. `AgentState` TypedDict (`total=False`), 5 nodes (`classify_intent`, `run_market_agent`, `run_ripple_agent`, `run_news_agent`, `run_qa_agent`), `build_graph()`, `run()` one-shot helper.
+- [`run.py`](run.py) — CLI wrapper (`--event`, `--query`, `--as-of`).
+- [`prompts/__init__.py`](prompts/__init__.py) — file-backed `load(name)` with strip.
+- Four prompt files: `prompts/ripple_system.txt`, `prompts/intent_system.txt`, `prompts/timeline_system.txt`, `prompts/qa_system.txt`.
+
+**New tests (19 total, all in tests/ and all offline-mockable):**
+- [`tests/test_llm.py`](tests/test_llm.py) — 3 tests (model ID, API-key requirement, class type).
+- [`tests/test_agent_ripple.py`](tests/test_agent_ripple.py) — 6 tests (structure parse, malformed-JSON raise, code-fence stripping, attach_news per-node recursion, attach_prices max-magnitude + fallback, end-to-end orchestrator).
+- [`tests/test_agent_supervisor.py`](tests/test_agent_supervisor.py) — 10 tests (8 classify_intent examples + 2 fallbacks, market passthrough, ripple focus-vs-fallback, news timeline, QA citations, graph routing, run() end-to-end).
+- [`tests/test_live_agents.py`](tests/test_live_agents.py) — 2 `RUN_LIVE=1`-gated probes (`classify_intent` + `generate_ripple_tree` against real Anthropic API).
+- Two fixtures: `tests/fixtures/ripple_llm_response.json`, `tests/fixtures/intent_examples.json`.
+
+**Suite snapshot (end of Session 6):** `pytest -v` → 53 passed + 4 skipped in ~7s.
+- Baseline → new test count delta: 34 → 53 (+19; zero Plan-1 regressions).
+- Skipped: 2 Plan-1 live (`test_smoke_live.py`) + 2 Plan-2 live (`test_live_agents.py`), all `RUN_LIVE=1`-gated.
+
+**Live paths wired but NOT smoke-tested this session** (the user may want to verify):
+- `/opt/anaconda3/envs/macro-ripple/bin/python run.py --event iran_war --query "..."` — runs end-to-end via the compiled LangGraph against real Anthropic + (if Plan-1 setup ran) real Chroma.
+- `RUN_LIVE=1 /opt/anaconda3/envs/macro-ripple/bin/pytest tests/test_live_agents.py -v` — 2 live probes.
+- Reason: these hit the Anthropic API and cost real budget; the user held execution until after unit-test validation was done.
+
+### (2) Deviations from the original plan (all intentional; all logged)
+
+**Four concrete deviations, all flagged to the user at decision time and all user-approved:**
+
+1. **`langchain-core==0.3.15` → `0.3.17`** (Task 1). Pip resolver rejected the plan's trio: `langchain-anthropic==0.3.0` requires `langchain-core>=0.3.17`. User picked "Option A — bump core by one patch, keep langchain-anthropic pinned at 0.3.0". `requirements.txt` and plan file footer both document. The plan's "Changes from original (Session 3–4 reconciliation)" section notes `langgraph==0.3.0` was bumped; Session 6 adds the `langchain-core` patch bump in a footer under "Execution Notes (Session 6)".
+
+2. **`llm.py` uses `load_dotenv(override=True)`** instead of the plan's bare `load_dotenv()` (Task 2). Claude Desktop exports `ANTHROPIC_API_KEY=` (empty string) in the parent shell. Without `override=True`, `load_dotenv()` treats the empty string as "already set" and refuses to replace it with the real value in `.env`. User picked "Option B — scope `override=True` to `llm.py`, leave `config.py` untouched". Documented in CLAUDE.md "Secrets & Environment" (commit `f74284c`) and in the plan file footer.
+
+3. **Task 8 test snippet corrected inline.** The plan's `monkeypatch.setattr(agent_supervisor, "get_chat_model", lambda **kw: _FakeLLM(replies))` creates a fresh `_FakeLLM(replies)` on every `get_chat_model()` call — each classify_intent iteration then popped `replies[0]` ("timeline") instead of advancing through the list. Session 6 caught this on the Red run and changed to `fake = _FakeLLM(replies); monkeypatch.setattr(..., lambda **kw: fake)` (single shared instance). The plan file was edited in place (commit `1bba33a`) with a Session-6 correction comment, matching Session-5's precedent for plan-file test fixes that lock in bugs.
+
+4. **`run_news_agent` and `run_qa_agent` use `strip_fences(...)` from `llm.py`** instead of the plan's inline `.strip().strip("\`").removeprefix("json").strip()` pattern (Tasks 11, 12). Driven by the post-Task-8 review's Important recommendation (I1): the plan's inline pattern is strictly weaker and would have required 2 more copies. The refactor (commit `3ff4548`) was done BEFORE Task 11 so Tasks 11/12 could use the shared helper directly. Plan file snippets updated in commit `002d5de` so future executions don't see phantom drift.
+
+**Non-deviations worth calling out** (the plan said these were reconciled in Session 5 and they still are):
+- `get_price_changes(cfg, as_of)` `available`-flag contract — `attach_prices` gates on `entry.get("available")`, not membership (`agent_ripple.py:67`).
+- `classify_intent` returns `{intent, focus}` JSON, not bare intent string.
+- `run_ripple_agent` uses `state.get("focus") or state["cfg"].display_name`, NOT `state["query"]`. Two tests lock both branches in (`test_run_ripple_agent_uses_focus`, `test_run_ripple_agent_falls_back_to_display_name`).
+- `retrieve()` can return `[]` — both `run_news_agent` and `run_qa_agent` short-circuit explicitly. `attach_news` is naturally safe (empty-list iteration).
+
+### (3) What is blocked and on what
+
+**Nothing is blocked on Plan 2.** Plan 3 (M5 Streamlit UI + §9 evaluation) is unblocked and fully ready to execute. Specifically:
+
+- **Live CLI smoke is an open item**, NOT a blocker: `run.py --event iran_war --query "..."` has not been run against real APIs in this session. The user held execution to avoid burning API budget on every iteration; the unit suite validates the wiring. A single manual live run would exercise: real `ANTHROPIC_API_KEY` load via `load_dotenv(override=True)` → classify_intent → either of the four workers → real `data_news.retrieve()` against the existing Chroma index → JSON to stdout.
+- **Plan 3 UX decision deferred:** `run_news_agent` + `run_qa_agent` empty-retrieval responses are jointly distinguishable by UI via the fixed sentinel string and empty citations list, but cleaner would be a `status: "no_retrieval" | "answered" | "no_answer"` field. Deferred to Plan 3 start (decide when drafting the UI tabs). Note appended at the bottom of this file.
+- **Live API-key env issue is latent for future live paths.** Any Plan-3 `app.py` (Streamlit) will hit the same Claude-Desktop-empty-key quirk the moment it calls the LLM. `llm.py` already guards via `override=True`, so as long as Plan 3's UI uses `llm.get_chat_model()` (rather than instantiating `ChatAnthropic` directly), it inherits the fix. CLAUDE.md now documents the asymmetry so Plan-3 authors don't re-stumble on it.
+- **Anthropic model ID `claude-sonnet-4-6` is the runtime target.** Whether a newer Sonnet has shipped by Plan-3 time should be checked — model-ID bumps are a one-line change in `llm.py:19` but require re-running the eval harness (Plan 3 §9) against the new model's ripple/timeline/QA quality baselines.
+
+### Code-review history this session
+
+Two mid-plan reviews dispatched via `superpowers:code-reviewer`. Both returned **zero Critical**; all Important items were folded into three cleanup commits (`1bba33a`, `3ff4548`, `f74284c` after Task 8; `7464292`, `002d5de` after Task 13) before continuing.
+
+| Checkpoint | Range | Critical | Important | Minor |
+|---|---|---|---|---|
+| Post-Task-8 | `1e70bdd..939e126` | 0 | 3 (I1: hoist strip_fences; I2: reorder imports; I3: `-> AgentState` type annotation commentary) | 5 |
+| Post-Task-13 | `f74284c..980cfad` | 0 | 3 (I1: LangGraph add_node capture; I2: late imports + monkeypatch trap; I3: unused `get_price_range`) | 5 |
+
+One smell caught and fixed per the checklist:
+- **CLAUDE.md Smell #7** (plan-file assertion locking in a bug) — the `lambda **kw: _FakeLLM(replies)` form. Caught on first Red run; fixed inline; plan file amended; progress.md documents the event.
+
+### Pre-Plan-3 checklist for next session
+
+1. `cd /Users/fangyihe/appliedfinance`
+2. `git status --short` → clean.
+3. `/opt/anaconda3/envs/macro-ripple/bin/pytest -v` → 53 passed + 4 skipped. If fewer tests pass, something regressed.
+4. Read Plan 3: [`docs/superpowers/plans/2026-04-16-plan-3-ui-eval.md`](docs/superpowers/plans/2026-04-16-plan-3-ui-eval.md). 12 tasks: M5 Streamlit 4-tab UI + §9 evaluation harness.
+5. Before writing any Plan-3 code, **re-verify the Plan-2 surfaces Plan-3 will consume**, same discipline as Session 5's Plan-1→Plan-2 reconciliation. Specifically check:
+   - `agent_supervisor.run(cfg, query, as_of) -> AgentState` return shape (keys differ by intent).
+   - `run_news_agent` / `run_qa_agent` empty-retrieval response shapes (the Plan-3 UX decision — will you add a `status` field?).
+   - `agent_ripple.generate_ripple_tree(...)` tree shape — especially `supporting_news` + `price_details` per node.
+   - `setup.is_setup_in_progress()` — Plan-3 UI must call this before firing any `retrieve()` to avoid racing a rebuild (Session 4 fcntl lock, CLAUDE.md `chromadb` quirks section).
+
+---
+
 ## Session 5 — 2026-04-23 (afternoon) — Plan 2 MD reconciliation
 
 **Model:** Claude Opus 4.7 (1M context) via Claude Code CLI.
