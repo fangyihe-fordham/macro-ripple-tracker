@@ -1,4 +1,5 @@
 """ChromaDB wrapper + sentence-transformers embeddings (local, free)."""
+import hashlib
 import os
 import shutil
 from pathlib import Path
@@ -54,7 +55,12 @@ def index_articles(articles: List[Dict]) -> None:
         body = " ".join(x for x in [a.get("headline", ""), a.get("snippet", ""), a.get("full_text", "")] if x).strip()
         if not body:
             continue
-        ids.append(f"{a.get('source_kind','unk')}-{i}-{abs(hash(a.get('url','')))}")
+        # Stable, process-independent ID: sha1 of URL (empty-URL articles still
+        # uniquify on {i}). Python's builtin hash() is salted per process, so
+        # IDs weren't reproducible across runs — a blocker for incremental
+        # reindexing later.
+        url_hash = hashlib.sha1(a.get("url", "").encode("utf-8")).hexdigest()[:16]
+        ids.append(f"{a.get('source_kind','unk')}-{i}-{url_hash}")
         docs.append(body)
         metas.append({
             "url": a.get("url", ""),
