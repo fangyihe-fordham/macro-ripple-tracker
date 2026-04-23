@@ -10,6 +10,13 @@ from config import EventConfig
 from llm import get_chat_model, strip_fences
 from prompts import load as load_prompt
 
+# Bound at module level so tests can `monkeypatch.setattr(agent_supervisor, ...)`.
+# Do NOT refactor to `import data_market` + `data_market.get_price_changes(...)`
+# inside functions — that would break every monkeypatch in test_agent_supervisor.py.
+from agent_ripple import generate_ripple_tree
+from data_market import get_price_changes
+from data_news import retrieve
+
 Intent = Literal["timeline", "ripple", "market", "qa"]
 _VALID_INTENTS = {"timeline", "ripple", "market", "qa"}
 
@@ -52,15 +59,9 @@ def classify_intent(state: AgentState) -> AgentState:
     return {"intent": intent, "focus": focus}
 
 
-from data_market import get_price_changes, get_price_range
-
-
 def run_market_agent(state: AgentState) -> AgentState:
     changes = get_price_changes(state["cfg"], as_of=state["as_of"])
     return {"market_data": changes}
-
-
-from agent_ripple import generate_ripple_tree
 
 
 def run_ripple_agent(state: AgentState) -> AgentState:
@@ -75,9 +76,6 @@ def run_ripple_agent(state: AgentState) -> AgentState:
         as_of=state["as_of"],
     )
     return {"ripple_tree": tree}
-
-
-from data_news import retrieve
 
 
 def run_news_agent(state: AgentState) -> AgentState:
@@ -133,6 +131,11 @@ def _route(state: AgentState) -> str:
 
 
 def build_graph():
+    # `add_node(name, callable)` captures the callable reference at build time.
+    # Tests that `monkeypatch.setattr(agent_supervisor, "classify_intent", ...)`
+    # work only because `build_graph()` runs AFTER the patch. Do NOT cache the
+    # compiled app as a module-level singleton — doing so would freeze stale
+    # references and silently break every test in this file.
     graph = StateGraph(AgentState)
     graph.add_node("classify_intent", classify_intent)
     graph.add_node("run_news_agent", run_news_agent)
