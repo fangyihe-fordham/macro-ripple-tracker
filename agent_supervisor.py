@@ -50,3 +50,11 @@ def classify_intent(state: AgentState) -> AgentState:
     intent: Intent = word if word in _VALID_INTENTS else "qa"  # type: ignore[assignment]
     focus = str(parsed.get("focus", "")).strip()
     return {"intent": intent, "focus": focus}
+
+
+from data_market import get_price_changes, get_price_range
+
+
+def run_market_agent(state: AgentState) -> AgentState:
+    changes = get_price_changes(state["cfg"], as_of=state["as_of"])
+    return {"market_data": changes}

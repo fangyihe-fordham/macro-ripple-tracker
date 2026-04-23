@@ -40,3 +40,17 @@ def test_classify_intent_malformed_json_falls_back_to_qa_empty_focus(monkeypatch
     out = agent_supervisor.classify_intent({"query": "???"})
     assert out["intent"] == "qa"
     assert out["focus"] == ""
+
+
+def test_run_market_agent_returns_dict(monkeypatch):
+    fake_changes = {
+        "BZ=F": {"available": True, "baseline": 74.20, "latest": 111.00, "pct_change": 49.60},
+        "XLE":  {"available": True, "baseline": 95.00, "latest": 118.00, "pct_change": 24.21},
+    }
+    monkeypatch.setattr(agent_supervisor, "get_price_changes",
+                        lambda cfg, as_of: fake_changes)
+    cfg = load_event("iran_war")
+    from datetime import date
+    state = {"query": "how did oil move?", "cfg": cfg, "as_of": date(2026, 4, 15)}
+    out = agent_supervisor.run_market_agent(state)
+    assert out["market_data"] == fake_changes
