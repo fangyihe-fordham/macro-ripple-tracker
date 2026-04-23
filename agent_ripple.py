@@ -7,6 +7,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from llm import get_chat_model
 from prompts import load as load_prompt
 from config import EventConfig
+from data_news import retrieve
 
 
 _FENCE_RE = re.compile(r"^```(?:json)?\s*|\s*```$", re.MULTILINE)
@@ -32,3 +33,20 @@ def generate_structure(event_description: str, cfg: EventConfig, max_depth: int 
         return json.loads(text)
     except json.JSONDecodeError as e:
         raise ValueError(f"Model did not return valid JSON: {e}\nRaw: {text[:500]}") from e
+
+
+def attach_news(tree: Dict, top_k: int = 3) -> Dict:
+    """Walk every node and attach supporting_news from retrieve()."""
+    def _walk(nodes: List[Dict]) -> None:
+        for n in nodes:
+            query = f"{n['sector']} {n['mechanism']}"
+            hits = retrieve(query, top_k=top_k)
+            n["supporting_news"] = [
+                {"url": h["url"], "headline": h["headline"],
+                 "date": h.get("metadata", {}).get("date", ""),
+                 "score": h["score"]}
+                for h in hits
+            ]
+            _walk(n.get("children", []))
+    _walk(tree.get("nodes", []))
+    return tree
