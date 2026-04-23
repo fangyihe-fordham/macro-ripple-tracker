@@ -65,6 +65,21 @@ def test_get_price_range(tmp_data_dir, fake_yf):
     assert series.iloc[-1] == pytest.approx(102.30)
 
 
+def test_missing_csv_logs_once_per_symbol(tmp_data_dir, capsys):
+    # Clear the module-level warn cache so this test is independent of order.
+    data_market._WARNED_MISSING.clear()
+    # CSV has never been written; all three query functions should flag it once.
+    assert data_market.get_price_on_date("BZ=F", date(2026, 2, 27)) is None
+    assert data_market.get_price_on_date("BZ=F", date(2026, 2, 28)) is None  # second call: silent
+    series = data_market.get_price_range("BZ=F", date(2026, 2, 26), date(2026, 3, 3))
+    assert series.empty  # third call for same symbol: still silent
+
+    out = capsys.readouterr().out
+    # Exactly one warning line mentioning BZ=F, even though the symbol was queried 3 times.
+    assert out.count("BZ=F") == 1
+    assert "no CSV on disk" in out
+
+
 def test_download_prices_returns_missing_symbols(tmp_data_dir, monkeypatch, fixtures_dir):
     """Tickers that yfinance returns empty for must surface in the return value, not silent."""
     cfg = load_event("iran_war")

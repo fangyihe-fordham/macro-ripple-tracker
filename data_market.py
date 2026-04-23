@@ -46,14 +46,29 @@ def download_prices(cfg: EventConfig) -> List[str]:
     return missing
 
 
+# One-shot per-symbol warning so bulk calls don't spam logs. Reset across processes,
+# which is fine — this is observability for ingestion gaps, not a correctness hook.
+_WARNED_MISSING: set[str] = set()
+
+
 def _load(symbol: str) -> Optional[pd.DataFrame]:
     p = _csv_path(symbol)
     if not p.exists():
+        if symbol not in _WARNED_MISSING:
+            print(f"[market] {symbol}: no CSV on disk at {p}; "
+                  f"setup.py may not have run or ticker was missing in last ingest")
+            _WARNED_MISSING.add(symbol)
         return None
     return pd.read_csv(p, parse_dates=["Date"])
 
 
 def get_price_on_date(symbol: str, d: date) -> Optional[float]:
+    """Close price for `symbol` on `d`.
+
+    Returns None in two distinct cases:
+      - No CSV on disk for this symbol (ingestion gap; warning logged once per symbol).
+      - CSV exists but `d` is not a trading day (weekend/holiday; silent, no warning).
+    """
     df = _load(symbol)
     if df is None:
         return None
@@ -64,7 +79,14 @@ def get_price_on_date(symbol: str, d: date) -> Optional[float]:
 
 
 def get_price_changes(cfg: EventConfig, as_of: date) -> dict:
-    """For each ticker, return {'baseline', 'latest', 'pct_change'} comparing baseline_date to as_of close."""
+    """For each ticker in cfg, return {'baseline', 'latest', 'pct_change'}.
+
+    A ticker is *omitted* from the returned dict if any of these are true:
+      - No CSV on disk (ingestion gap; warning logged via _load).
+      - No row matches `cfg.baseline_date` (weekend/pre-trading).
+      - No row matches `as_of` (weekend/pre-trading).
+    Callers inspecting `cfg.tickers` vs. the returned keys can detect gaps.
+    """
     out = {}
     for ticker in cfg.tickers:
         df = _load(ticker.symbol)
@@ -85,7 +107,12 @@ def get_price_changes(cfg: EventConfig, as_of: date) -> dict:
 
 
 def get_price_range(symbol: str, start: date, end: date) -> pd.Series:
-    """Return a Close-price Series indexed by Date for [start, end] inclusive."""
+    """Close-price Series indexed by Date for [start, end] inclusive, trading days only.
+
+    Returns an empty Series in two distinct cases:
+      - No CSV on disk for this symbol (ingestion gap; warning logged via _load).
+      - CSV exists but no trading days fall inside [start, end] (silent).
+    """
     df = _load(symbol)
     if df is None:
         return pd.Series(dtype=float)
