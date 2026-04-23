@@ -95,6 +95,46 @@ def test_fetch_newsapi_skips_when_window_entirely_before_free_tier(monkeypatch):
     assert called["count"] == 0
 
 
+def test_fetch_newsapi_preserves_page1_when_free_tier_cap_hits_on_page2(monkeypatch):
+    """Free tier hard-caps at 100 total; page 2 raises NewsAPIException with
+    code 'maximumResultsReached'. The fetcher must KEEP the 100 page-1
+    articles — dropping them was a regression introduced with paging."""
+    from newsapi.newsapi_exception import NewsAPIException
+
+    monkeypatch.setenv("NEWSAPI_KEY", "dummy-key")
+    monkeypatch.setattr(newsapi_fetcher, "date", _FixedDate)
+
+    def make_article(i):
+        return {
+            "url": f"https://x.com/{i}", "title": f"headline {i}",
+            "source": {"name": "X"}, "publishedAt": "2026-04-01T00:00:00Z",
+            "description": "", "content": "",
+        }
+
+    class FakeClient:
+        def __init__(self, api_key):
+            pass
+
+        def get_everything(self, q, from_param, to, language, page_size, page):
+            if page == 1:
+                return {"totalResults": 464343,
+                        "articles": [make_article(i) for i in range(100)]}
+            raise NewsAPIException({
+                "status": "error",
+                "code": "maximumResultsReached",
+                "message": "Developer accounts are limited to a max of 100 results.",
+            })
+
+    monkeypatch.setattr(newsapi_fetcher, "NewsApiClient", FakeClient)
+    cfg = load_event("iran_war")
+    articles = newsapi_fetcher.fetch(cfg, max_pages=5)
+
+    # Page 1's 100 articles must survive the page-2 cap error.
+    assert len(articles) == 100
+    assert articles[0]["url"] == "https://x.com/0"
+    assert articles[-1]["url"] == "https://x.com/99"
+
+
 def test_fetch_newsapi_paginates_until_short_page(monkeypatch, capsys):
     """Pages 1+2 full (100 each) + page 3 partial (7) → fetcher stops after page 3."""
     monkeypatch.setenv("NEWSAPI_KEY", "dummy-key")
