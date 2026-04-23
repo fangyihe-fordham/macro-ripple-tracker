@@ -1,0 +1,41 @@
+{
+  "event": "Strait of Hormuz closure",
+  "nodes": [
+    {
+      "sector": "Oil Supply",
+      "mechanism": "~25% of seaborne oil transits Hormuz; closure removes supply immediately.",
+      "severity": "critical",
+      "ticker_hints": ["BZ=F", "CL=F", "XLE"],
+      "children": [
+        {
+          "sector": "Fertilizer Production",
+          "mechanism": "Natural gas is the primary feedstock for ammonia; disrupted LNG lifts input costs.",
+          "severity": "significant",
+          "ticker_hints": ["CF", "NG=F"],
+          "children": []
+        },
+        {
+          "sector": "Airline Fuel Costs",
+          "mechanism": "Jet fuel tracks crude; airline margins compress.",
+          "severity": "significant",
+          "ticker_hints": [],
+          "children": []
+        }
+      ]
+    },
+    {
+      "sector": "Shipping",
+      "mechanism": "Insurance rates and rerouting costs spike for tankers transiting the region.",
+      "severity": "critical",
+      "ticker_hints": ["BOAT"],
+      "children": []
+    },
+    {
+      "sector": "Defense",
+      "mechanism": "Military escalation risk drives defense spending expectations higher.",
+      "severity": "moderate",
+      "ticker_hints": ["ITA"],
+      "children": []
+    }
+  ]
+}
