@@ -65,9 +65,11 @@ def _load(symbol: str) -> Optional[pd.DataFrame]:
 def get_price_on_date(symbol: str, d: date) -> Optional[float]:
     """Close price for `symbol` on `d`.
 
-    Returns None in two distinct cases:
-      - No CSV on disk for this symbol (ingestion gap; warning logged once per symbol).
-      - CSV exists but `d` is not a trading day (weekend/holiday; silent, no warning).
+    Missing-data contract (returns None in BOTH cases — callers must handle
+    None explicitly):
+      - No CSV on disk for this symbol (ingestion gap; _load logs once per symbol).
+      - CSV exists but `d` is not a trading day (weekend/holiday; silent).
+    Use `get_price_changes` if you need to distinguish these two cases.
     """
     df = _load(symbol)
     if df is None:
@@ -79,26 +81,38 @@ def get_price_on_date(symbol: str, d: date) -> Optional[float]:
 
 
 def get_price_changes(cfg: EventConfig, as_of: date) -> dict:
-    """For each ticker in cfg, return {'baseline', 'latest', 'pct_change'}.
+    """For each ticker in cfg, always return an entry keyed by symbol.
 
-    A ticker is *omitted* from the returned dict if any of these are true:
-      - No CSV on disk (ingestion gap; warning logged via _load).
-      - No row matches `cfg.baseline_date` (weekend/pre-trading).
-      - No row matches `as_of` (weekend/pre-trading).
-    Callers inspecting `cfg.tickers` vs. the returned keys can detect gaps.
+    Each entry has:
+      {
+        "available": bool,        # True iff baseline + latest both present
+        "baseline": Optional[float],
+        "latest":   Optional[float],
+        "pct_change": Optional[float],
+      }
+
+    When `available` is False, the other three fields are None and the reason
+    (missing CSV vs. non-trading baseline vs. non-trading as_of) is logged
+    via _load or silently skipped. The dict ALWAYS contains every symbol in
+    `cfg.tickers` — no KeyError for consumers that iterate `cfg.tickers` and
+    look up each one. This is the contract Plan 2's agent_ripple relies on.
     """
-    out = {}
+    out: dict = {}
     for ticker in cfg.tickers:
+        entry = {"available": False, "baseline": None, "latest": None, "pct_change": None}
         df = _load(ticker.symbol)
         if df is None or df.empty:
+            out[ticker.symbol] = entry
             continue
         baseline = df[df["Date"].dt.date == cfg.baseline_date]
         latest = df[df["Date"].dt.date == as_of]
         if baseline.empty or latest.empty:
+            out[ticker.symbol] = entry
             continue
         b = float(baseline["Close"].iloc[0])
         l = float(latest["Close"].iloc[0])
         out[ticker.symbol] = {
+            "available": True,
             "baseline": b,
             "latest": l,
             "pct_change": (l - b) / b * 100.0,
@@ -109,8 +123,9 @@ def get_price_changes(cfg: EventConfig, as_of: date) -> dict:
 def get_price_range(symbol: str, start: date, end: date) -> pd.Series:
     """Close-price Series indexed by Date for [start, end] inclusive, trading days only.
 
-    Returns an empty Series in two distinct cases:
-      - No CSV on disk for this symbol (ingestion gap; warning logged via _load).
+    Missing-data contract (returns an EMPTY `pd.Series(dtype=float)` in BOTH
+    cases — callers must check `series.empty` before using it):
+      - No CSV on disk for this symbol (ingestion gap; _load logs once per symbol).
       - CSV exists but no trading days fall inside [start, end] (silent).
     """
     df = _load(symbol)

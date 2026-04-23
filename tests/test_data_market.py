@@ -48,12 +48,43 @@ def test_get_price_changes_vs_baseline(tmp_data_dir, fake_yf):
     cfg = load_event("iran_war")
     data_market.download_prices(cfg)
     changes = data_market.get_price_changes(cfg, as_of=date(2026, 3, 4))
+    # Contract: every cfg.tickers symbol appears in result, with available flag.
+    assert set(changes.keys()) == {t.symbol for t in cfg.tickers}
     # BZ=F: baseline Feb 27 close = 74.20, as_of Mar 4 close = 111.00
     # pct_change = (111.00 - 74.20) / 74.20 * 100 ≈ 49.60%
-    assert "BZ=F" in changes
+    assert changes["BZ=F"]["available"] is True
     assert changes["BZ=F"]["baseline"] == pytest.approx(74.20)
     assert changes["BZ=F"]["latest"] == pytest.approx(111.00)
     assert changes["BZ=F"]["pct_change"] == pytest.approx(49.60, abs=0.1)
+
+
+def test_get_price_changes_keeps_missing_ticker_with_available_false(
+    tmp_data_dir, fake_yf
+):
+    """Plan 2 contract: every cfg.tickers symbol must be keyed in the result,
+    even when the underlying CSV was wiped — the entry marks itself unavailable."""
+    cfg = load_event("iran_war")
+    data_market.download_prices(cfg)
+
+    # Delete one ticker's CSV to simulate a mid-pipeline ingest gap.
+    missing_symbol = "BZ=F"
+    csv_path = data_market._csv_path(missing_symbol)
+    assert csv_path.exists()
+    csv_path.unlink()
+    # Clear the one-shot warn cache so the test is deterministic wrt logs.
+    data_market._WARNED_MISSING.clear()
+
+    changes = data_market.get_price_changes(cfg, as_of=date(2026, 3, 4))
+    # Still keyed — no KeyError in downstream code.
+    assert missing_symbol in changes
+    entry = changes[missing_symbol]
+    assert entry["available"] is False
+    assert entry["baseline"] is None
+    assert entry["latest"] is None
+    assert entry["pct_change"] is None
+    # Other symbols stay available.
+    other_avail = [sym for sym, e in changes.items() if e["available"] is True]
+    assert len(other_avail) == len(cfg.tickers) - 1
 
 
 def test_get_price_range(tmp_data_dir, fake_yf):
