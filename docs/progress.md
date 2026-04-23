@@ -1,5 +1,184 @@
 # Progress Log
 
+## Session 4 — 2026-04-23
+
+**Model:** Claude Opus 4.7 (1M context) via Claude Code CLI.
+**Scope:** Post-Plan-1 code review, then two rounds of hardening fixes. **Did not start Plan 2** — session ran long on surfaced issues. Plan 2 remains unblocked and is now better-prepared (Plan 2 file was reconciled to Plan 1's new contracts).
+**Outcome:** **Plan 1 is DONE and HARDENED.** 34 pytest passing + 2 live-gated skipped (up from 21+2 at end of Session 3 — 13 new regression tests landed). End-to-end live run against real GDELT + NewsAPI + yfinance succeeds cleanly with zero noise. Retrieval quality improved: top hit for "Hormuz closure oil price" now scores 0.533 (was 0.39 in Session 3). 15 fix commits + 1 user-authored Plan-2 reconciliation = 16 commits added to main this session.
+
+### Session structure
+
+Session was organized into three phases, user-directed:
+
+1. **Code review** — dispatched `superpowers:code-reviewer` subagent on Plan 1's full commit range (`1a4638a^` → `fc3704c`, the entire data layer). Came back with **4 Critical** (C1–C4), **5 Important** (I1–I5), **6 Minor** findings. Strengths-acknowledged: clean DATA_DIR isolation, library-quirk compliance, no hardcoded event data, above-average test quality.
+2. **Round 1 hardening** — 8 commits, user-specified ordering (C3 first to "turn on the lights", then I3/I4/C1/C2+I1/I2/I5/C4). All 8 of the reviewer's Critical + Important findings addressed.
+3. **Round 2 cleanup** — 6 more tasks in a fresh `superpowers:executing-plans` invocation: kill chromadb telemetry, deprecate RSS, NewsAPI pagination, lock down C3+I5 with tests, harden HTML stripping against prompt injection, and *actually* unify market missing-data semantics (Round 1's I2 was docstring-only; Round 2 Task 6 made it behavioral with breaking-change `available` flag). Round 2 surfaced a self-inflicted regression during verification (NewsAPI pagination dropped from 100→0 articles on live run); fixed in a follow-up commit before wrap-up.
+
+### Commits landed this session (chronological — oldest first)
+
+**Round 1 — hardening against code-review findings (8 commits):**
+
+| # | Commit | Type | Finding | Summary |
+|---|---|---|---|---|
+| 1 | `ecd92fc` | fix(M1) | **C3** | `vector_store._collection(create=False)` now narrowly catches `InvalidCollectionException` (the legit "no data yet" case) and prints before returning None on anything else. Prevents Plan 2 LLMs from confusing a broken DB with "no hits". |
+| 2 | `c454c8b` | test(M1) | **I3** | Two NewsAPI clamp assertions: `from_param` lands on `today-29d` when cfg.start predates it; client is never constructed when the whole window is stale. Monkeypatches `newsapi_fetcher.date` via subclass. |
+| 3 | `45b6157` | fix(M1) | **I4** | `_strip_html` in rss.py (stdlib: regex + `html.unescape`). Fixture rewritten with `<p><a>…</a></p>&nbsp;`; test asserts no angle brackets + no entities in stored snippet. |
+| 4 | `62dbc4c` | fix | **C1** | `setup.py --refresh` now also `rmtree`'s `data/prices/` and `unlink`'s `articles.json`. Test plants stale `STALE_TICKER.csv` + stale articles.json, runs --refresh, asserts both are wiped. |
+| 5 | `36a4d3d` | fix | **C2+I1** | `deduplicate()` returns `(kept, stats)` where stats=`{input, url_dropped, minhash_dropped, kept}`. MinHash threshold bumped 0.9 → 0.95 (headline-only shingling collapsed distinct stories). `download_prices()` returns `List[str]` of missing symbols. Both surface in `manifest.json` as `dedup` and `missing_tickers` keys. |
+| 6 | `eba54a7` | fix(M2) | **I2 (insufficient)** | Module-level `_WARNED_MISSING` set in `data_market`; `_load()` logs once per missing symbol. Docstrings enumerated the two "missing" cases per function. **This turned out to be docstring-only and insufficient** — Round 2 Task 6 replaced it with a real behavioral fix. |
+| 7 | `15edf56` | fix(M1) | **I5** | Vector ID hash swapped from salted `hash(url)` to `hashlib.sha1(url)[:16]`. Stable across processes, unblocks future incremental reindex. |
+| 8 | `e5a84ad` | fix | **C4** | `setup.py` takes an exclusive `fcntl.flock` on `$DATA_DIR/setup.lock` for the whole run. New `is_setup_in_progress()` helper for Plan 3's UI. Subprocess-based test verifies contention behavior. |
+
+**Round 2 — cleanup + deferred work (7 commits incl. regression fix):**
+
+| # | Commit | Type | Task | Summary |
+|---|---|---|---|---|
+| 9 | `a1138b2` | chore(vector_store) | R2-T1 (partial) | `Settings(anonymized_telemetry=False)` on `PersistentClient`. **Turned out not to work** (see Deviations); supplemented in commit 12. |
+| 10 | `5fb2c8c` | docs(events) | R2-T2 | `iran_war.yaml: rss_feeds: []` with inline comment explaining Reuters RSS shutdown (June 2020). New top-level `README.md` documenting data-source strategy (GDELT primary, NewsAPI secondary 30-day, RSS deprecated). `data_news/rss.py` untouched — kept as skeleton. `tests/test_rss.py` now injects a synthetic `cfg.rss_feeds=["..."]`. |
+| 11 | `db8beb9` | feat(newsapi) | R2-T3 | Paginate to `max_pages=5`; log `totalResults` on first page. **Introduced a regression** (see Deviations); fixed in commit 15. |
+| 12 | `90f02db` | test(vector_store) | R2-T4 | Two regression tests: C3 error-surfacing (monkeypatch `_embedder` → RuntimeError, assert empty list + visible error text) and I5 stable IDs (`reset → index → collection.get()['ids']` twice, assert equal). Needed two supplementary in-file fixes: `reset()` now also calls `chromadb.api.client.SharedSystemClient.clear_system_cache()` (stale per-path SQLite handle cache), and `chromadb.telemetry.product.posthog` logger silenced at CRITICAL (real fix for R2-T1 — `Settings` doesn't suppress the buggy capture()). |
+| 13 | `0726337` | fix(rss) | R2-T5 | `_strip_html` now strips `<script>...</script>`, `<style>...</style>`, `<!--...-->` CONTENT-AND-ALL (case-insensitive, DOTALL) BEFORE the tag strip, then unescapes. Prompt-injection hardening for Plan 2. Two tests cover script+style+comment+tag stew and case-insensitive newline-spanning `<SCRIPT>`. |
+| 14 | `33f88f5` | refactor(data_market) | R2-T6 | **BREAKING:** `get_price_changes` now ALWAYS returns every `cfg.tickers` symbol as a key. Each entry has `{"available": bool, "baseline": Optional[float], "latest": Optional[float], "pct_change": Optional[float]}`. Plan 2 consumers iterate `cfg.tickers` + branch on `available` — no KeyErrors, no surprise partial dicts. Sibling functions documented for their distinct missing-data returns but behavior unchanged. |
+| 15 | `862d263` | fix(newsapi) | R2-T3 regression | Free-tier hard-caps at 100 TOTAL results (not 100/page). Page 2+ always returns code `maximumResultsReached`. The whole-body try/except was swallowing the page-2 error AFTER page 1 already appended 100 articles, then returning `[]`. Now the try/except is PER-PAGE and `break`s on page-2 cap so page-1 results survive. 100 → 100 articles restored on live run. |
+
+**User-authored commit:**
+
+| # | Commit | Type | Summary |
+|---|---|---|---|
+| 16 | `35f46e2` | docs(plan-2) | User-initiated reconciliation of Plan 2 markdown with Plan 1's new contracts. Per commit message: updates `get_price_changes` fixtures/expectations for the `available` flag, marks `.env`/`python-dotenv` pre-existing (Plan 2 Task 1 should skip those steps), bumps langgraph pin to 0.3.0, adds empty-hits guards to news/qa agents, adds Co-Authored-By trailers. Also adds a "focus extraction" enhancement: `classify_intent` now returns `{intent, focus}` JSON so imperative query prefixes like "Show me the ripple tree for..." don't leak into the ripple-tree generator's `event_description` input. Plan 2 file grew from ~350 lines to ~630. |
+
+### Tasks completed (plan mapping vs. scope creep)
+
+This session had no Plan 1 or Plan 2 TASKS (Plan 1 was already done). All work was either:
+- **Code-review-driven hardening** (Round 1 commits 1–8) — not in any plan file; triggered by post-Plan-1 review.
+- **User-specified cleanup** (Round 2 commits 9–15) — user pasted a 6-task mini-plan as the `/superpowers:executing-plans` args; no plan file created/updated for it, which per CLAUDE.md's "Don't add features ... beyond what the task requires" is intentional.
+- **User doc-edit** (commit 16) — Plan 2 markdown updated in a separate Claude session.
+
+**No deviation from scope lock** — zero production code reached beyond Plan 1's `config.py`, `data_market.py`, `data_news/`, `setup.py`, `events/`, `tests/`. README.md added at repo root is documentation, not scope expansion.
+
+### Deviations from plan/spec text (incidents this session)
+
+Material moments where reality bit back. Future sessions that hit similar patterns should expect the same gotchas.
+
+1. **R2-T1 "disable chromadb telemetry" didn't work with the first fix.**
+   - Task text said "turn off anonymized_telemetry via Settings or env var, pick whichever is cleaner." Picked `Settings(anonymized_telemetry=False)` on `PersistentClient`. Claimed victory in commit `a1138b2` after a misleading stdout-only check.
+   - **Reality:** `chromadb==0.5.18` fires `posthog.capture()` REGARDLESS of the `anonymized_telemetry` flag. The call fails with a signature mismatch (`capture() takes 1 positional argument but 3 were given`) and chromadb's own `posthog` logger records it at ERROR level. Goes to stderr / pytest captured-logs, not stdout.
+   - **Detection:** Caught in Round 2 Task 4 when pytest's "Captured log call" section showed 5+ telemetry ERROR lines per test. Verified with a naked `python -c ...` call against stderr → still noisy.
+   - **Real fix (commit `90f02db`):** `logging.getLogger("chromadb.telemetry.product.posthog").setLevel(logging.CRITICAL)` at module load time. Cleanly silences the spam without suppressing our own logs. The `Settings(...)` line was left in place — it's the documented-correct way, doesn't hurt, may work on a future chromadb version that fixes the underlying posthog bug.
+   - **Lesson:** verify stderr / logger capture, not just stdout, when claiming "no noise." Silencing via `logging.getLogger(...).setLevel(CRITICAL)` is the only reliable chromadb 0.5.18 workaround — now documented in CLAUDE.md "Library Quirks".
+
+2. **R2-T3 "paginate NewsAPI to 5 pages" caused 100 → 0 regression on live run.**
+   - NewsAPI developer tier is documented as "100 requests/day". Plan text assumed this meant 100-per-page limit and suggested 5 pages × 100 = 500 articles achievable.
+   - **Reality:** the free-tier cap is **100 TOTAL results per query**, not per page. Requesting page 2 returns HTTP 426 `{"code": "maximumResultsReached", "message": "Developer accounts are limited to a max of 100 results. You are trying to request results 100 to 200. Please upgrade..."}`. Discovered during the verification live run.
+   - **Secondary bug (worse):** the fetcher's `try/except Exception: ...; return []` was wrapping the whole page loop. Page 1 appended 100 articles to `results`, page 2 raised `NewsAPIException`, whole-body except caught it, fetcher returned `[]`. Result: **live run went from 100 articles (pre-pagination) to 0 articles (post-pagination).** Pure regression.
+   - **Fix (commit `862d263`):** moved try/except INSIDE the page loop, narrowed to `NewsAPIException`, check `e.get_code() == "maximumResultsReached"`, then `break` (not `raise` or `return []`). Page-1 results survive. Log line rewritten to warn explicitly that "free-tier hard cap is 100 total, so page 2+ will 426" — prevents the next reader from chasing paging as a solvable problem.
+   - Added a regression test (`test_fetch_newsapi_preserves_page1_when_free_tier_cap_hits_on_page2`) that simulates the exact failure mode with a `NewsAPIException` raised on page 2.
+   - **Lesson:** "free tier X requests/day" vendor language is ambiguous between "API calls per day" and "total records returnable per query" — verify which by examining an actual error payload. Also: whole-body try/except around a stateful accumulator (results) is a latent bug; move boundary exceptions INSIDE the per-iteration loop.
+
+3. **R1-I2 "unify missing-data semantics" was docstring-only — was not enough.**
+   - Round 1 I2 (commit `eba54a7`) added docstrings explaining how `get_price_on_date`, `get_price_changes`, `get_price_range` each return different sentinels on missing data (`None`, omitted dict key, empty Series). Added a `_WARNED_MISSING` set + log line in `_load()` so missing CSVs become visible.
+   - **Reality:** docstrings don't prevent `KeyError` at runtime. A Plan 2 agent doing `changes["BZ=F"]["pct_change"]` would still raise on any ingestion gap.
+   - **Round 2 Task 6 (commit `33f88f5`) replaced it with a behavioral fix:** `get_price_changes` always returns EVERY `cfg.tickers` symbol as a key, and each entry has an `available: bool` flag. This is a **breaking change** (no backward-compat wrapper) but there are no Plan 2 consumers yet, and the user's reconciliation commit (`35f46e2`) updated Plan 2's fixtures and expected shapes to match.
+   - **Lesson:** "document the contract" is not the same as "enforce the contract." If an invariant is important to downstream code, encode it in return-shape, not in English prose.
+
+4. **chromadb's `SharedSystemClient` caches per-path SQLite handles across calls.**
+   - The I5 stable-ID test did `reset() → index_articles(a) → get_ids()` then `reset() → index_articles(a) → get_ids()` in the same process. Second `index_articles` raised `sqlite3.OperationalError: attempt to write a readonly database`.
+   - **Root cause:** `chromadb.PersistentClient(path=p)` looks up a singleton in `chromadb.api.client.SharedSystemClient`; our `reset()` was `shutil.rmtree`ing the directory but the cached client was still holding the old SQLite file handle, now pointing at a deleted inode.
+   - **Fix (embedded in commit `90f02db`):** `reset()` now calls `chromadb.api.client.SharedSystemClient.clear_system_cache()` after `rmtree`. Documented in CLAUDE.md — any future caller who invokes `reset()` more than once in a single process would have hit this.
+   - **Lesson:** chromadb's "persistent" isn't really path-isolated at the process layer — it's singleton-per-path, and `rmtree` on the path does not invalidate the cached client.
+
+5. **R2-T3 `totalResults` value is inflated by NewsAPI.**
+   - Live run printed `[newsapi] totalResults=464343`. That is not the real count of Iran-war-matching articles in the last 30 days; NewsAPI's `totalResults` field appears to be either a loose estimate or unfiltered-by-language upper bound. Actual fetchable count is capped at 100 (see deviation 2).
+   - Log message was reworded in the regression-fix commit to make this explicit: "fetching up to 5 page(s) × 100 (note: free-tier hard cap is 100 total, so page 2+ will 426)". The `totalResults=464343` still appears in logs but the caveat follows it immediately.
+
+6. **RSS yaml change broke existing RSS unit test.**
+   - Setting `iran_war.yaml: rss_feeds: []` (R2-T2) meant `load_event("iran_war").rss_feeds` is now empty. `tests/test_rss.py::test_fetch_rss_filters_by_keywords` then iterates zero feeds and finds zero articles — fixture-driven assertions about rss-1/rss-3 all fail.
+   - **Fix within the same commit:** test now does `cfg = load_event("iran_war"); cfg.rss_feeds = ["https://example.com/feed.xml"]` — mutating a pydantic model is fine (not `frozen=True`). Then `monkeypatch.setattr(rss, "_parse_feed", ...)` returns the fixture parse regardless of URL.
+   - **Lesson:** pydantic v2 models in this project are **mutable by default**. Tests can inject synthetic values via `cfg.field = new_value` without any special-case pydantic magic. Now documented in CLAUDE.md.
+
+### Current state (end of Session 4)
+
+- **Pytest:** `/opt/anaconda3/envs/macro-ripple/bin/pytest -v` → **34 passed, 2 skipped** (5s). +13 tests net vs. Session 3.
+- **New tests this session (13):**
+  - `tests/test_newsapi.py`: `clamps_start_to_30_day_window`, `skips_when_window_entirely_before_free_tier` (R1-I3); `paginates_until_short_page`, `preserves_page1_when_free_tier_cap_hits_on_page2` (R2-T3).
+  - `tests/test_rss.py`: `strip_html_removes_script_style_and_comments`, `strip_html_case_insensitive_and_spanning_newlines` (R2-T5).
+  - `tests/test_setup_cli.py`: `setup_refresh_wipes_stale_prices_and_articles` (R1-C1); `setup_lock_blocks_concurrent_run` (R1-C4).
+  - `tests/test_data_market.py`: `missing_csv_logs_once_per_symbol` (R1-I2); `download_prices_returns_missing_symbols` (R1-I1); `get_price_changes_keeps_missing_ticker_with_available_false` (R2-T6).
+  - `tests/test_vector_store.py`: `retrieve_surfaces_unexpected_errors_instead_of_silent_empty` (R2-T4/C3); `index_ids_are_stable_across_runs` (R2-T4/I5).
+- **Final live-run baseline** (`python setup.py --event iran_war --refresh`, last successful full run this session):
+  - GDELT: 1,750 articles across 7 chunks (all 7 succeeded — clean run with no rate-limit hits; a previous same-session run had 4/7 chunk failures due to GDELT's "one request every 5 seconds" limit with our 2s sleep; chunks recovered gracefully per design).
+  - NewsAPI: 100 articles, free-tier cap reached at page 2 as expected.
+  - RSS: 0 articles (expected post-deprecation).
+  - Dedup: 1,850 → 1,387 unique (`url_dropped=6, minhash_dropped=457`).
+  - Prices: 11/11 CSVs, `missing_tickers=[]`.
+  - Retrieval: `retrieve("Hormuz closure oil price", top_k=3)` → top hit **0.533** ("Crude oil could top $100 as Strait of Hormuz closure halts flows"); #2 = 0.479; #3 = 0.457. Session 3 baseline was 0.39 — improvement attributable to a larger (1,387 vs 1,217) and better-deduplicated corpus.
+  - Market data spot-check on the new contract: `get_price_changes(cfg, date(2026,4,15))` returns all 11 symbols keyed with `available=True`, Brent +30.97%, WTI +36.21%, Aluminum +18.71%, CF Industries +21.37%, S&P 500 +2.09%, BOAT -2.08%, ITA -3.99%.
+- **manifest.json** (actual contents on disk after final run):
+  ```json
+  {
+    "event": "iran_war",
+    "snapshot_utc": "2026-04-23T20:36:41.777234+00:00",
+    "article_count": 1387,
+    "source_counts": {"gdelt": 1750, "newsapi": 100, "rss": 0},
+    "dedup": {"input": 1850, "url_dropped": 6, "minhash_dropped": 457, "kept": 1387},
+    "ticker_count": 11,
+    "missing_tickers": []
+  }
+  ```
+- **Public APIs (updated shapes — Plan 2 must use these exact contracts):**
+  - `config.load_event(name) -> EventConfig` (unchanged; pydantic mutable).
+  - `data_market.download_prices(cfg) -> List[str]` (**new return type** — list of symbols that came back empty from yfinance; empty list means all-green).
+  - `data_market.get_price_on_date(symbol, d) -> Optional[float]` (unchanged shape; docstring now calls out both missing cases).
+  - `data_market.get_price_changes(cfg, as_of) -> Dict[str, Dict]` (**new shape** — always keyed by every `cfg.tickers` symbol; each value is `{"available": bool, "baseline": Optional[float], "latest": Optional[float], "pct_change": Optional[float]}`).
+  - `data_market.get_price_range(symbol, start, end) -> pd.Series` (unchanged shape; docstring now calls out both missing cases; callers must `.empty` check).
+  - `data_news.dedup.deduplicate(articles, minhash_threshold=0.95) -> Tuple[List[Dict], Dict[str,int]]` (**new** — returns `(kept, stats)` with `stats={input,url_dropped,minhash_dropped,kept}`; default threshold bumped from 0.9).
+  - `data_news.retrieve / index_articles / reset / read_articles / write_articles` (unchanged surface — `reset()` now also clears chromadb's SharedSystemClient cache; transparent to callers).
+  - `data_news.newsapi_fetcher.fetch(cfg, max_pages=1) -> List[Dict]` (unchanged signature; `setup.py` now passes `max_pages=5`; pagination respects the 100-total cap).
+  - `setup.main(argv) -> int` (unchanged public shape; now fcntl-locked + observable).
+  - `setup.is_setup_in_progress() -> bool` (**new helper** for Plan 3's UI to gate "refresh now" buttons).
+  - `setup._setup_lock()` (**new internal** — `fcntl.flock` context manager; not public but exported via module for the concurrent-run test).
+
+- **manifest.json schema (expanded):** `event, snapshot_utc, article_count, source_counts{gdelt,newsapi,rss}, dedup{input,url_dropped,minhash_dropped,kept}, ticker_count, missing_tickers`. The `dedup` and `missing_tickers` fields are new in Session 4.
+
+- **Environment:** unchanged. `/opt/anaconda3/envs/macro-ripple/bin/python` (3.11). All `requirements.txt` pins untouched this session (yfinance still `0.2.66`, chromadb still `0.5.18`, newsapi-python still `0.2.7`). Plan 2 will add LangChain + LangGraph deps.
+
+### Blockers
+
+**None.** Plan 2 is fully unblocked. Specifically:
+
+- `ANTHROPIC_API_KEY` present in `.env` (Session 2 state unchanged).
+- Plan 2 markdown has been reconciled by the user (commit `35f46e2`) to accept the breaking contracts landed this session — Task 1's `.env.example` + `python-dotenv` steps can be skipped (already done), Task 6's fixtures use the new `{available, baseline, latest, pct_change}` shape, Task 8 (`classify_intent`) now returns `{intent, focus}` JSON instead of bare-word, Task 10 (`run_ripple_agent`) uses the extracted `focus` rather than raw `state["query"]` as the ripple generator's event description.
+- No upstream-API health concerns visible in the final live run. GDELT's 5-seconds-between-requests rate limit is routinely bumped against on multi-chunk runs (see "Library Quirks"); the existing broad-except handler absorbs it gracefully.
+
+### Next session — exact next step
+
+**Plan 2 Task 1 (inline per CLAUDE.md Working Mode for deps/scaffolding).**
+
+Source: [`docs/superpowers/plans/2026-04-16-plan-2-agents.md`](docs/superpowers/plans/2026-04-16-plan-2-agents.md) → Task 1.
+
+Pre-task checklist before starting:
+
+```bash
+cd /Users/fangyihe/appliedfinance
+/opt/anaconda3/envs/macro-ripple/bin/pytest -v                                      # expect: 34 passed, 2 skipped
+git status --short                                                                   # expect: clean
+/opt/anaconda3/envs/macro-ripple/bin/python -c "import config, os; print(bool(os.environ.get('ANTHROPIC_API_KEY')))"  # expect: True
+```
+
+Task 1 per the reconciled plan:
+- Append to `requirements.txt`: `langchain==0.3.7`, `langchain-core==0.3.15`, `langchain-anthropic==0.3.0`, `langgraph==0.3.0`. **Skip** `python-dotenv==1.0.1` (already pinned from Session 2).
+- `pip install -r requirements.txt` and verify `from langchain_anthropic import ChatAnthropic; from langgraph.graph import StateGraph` both import.
+- **Skip** the `.env.example` + `.env` create/copy steps — both already exist from Session 2.
+- Create `prompts/__init__.py` with the `load(name)` helper.
+- Commit: `chore: add LangChain/LangGraph deps + prompt loader`.
+
+Pre-Task-1 concerns to flag to the user before running `pip install`:
+- Plan 2 reconciliation (commit `35f46e2`) bumped `langchain-anthropic==0.2.4 → 0.3.0` and `langgraph==0.2.50 → 0.3.0`. Nothing in Plan 1 imports either library, so the bump is safe, but it IS a version change in a working env — confirm before installing.
+
+After Task 1, per the plan's mode mapping: Tasks 2 (`llm.py`) inline, Task 3 (prompts) inline, Tasks 4–7 (ripple tree: structure/news/prices/orchestrator) subagent each (LLM-heavy), Tasks 8–12 (supervisor nodes) subagent each, Tasks 13–15 (graph assembly, CLI, live smoke) inline.
+
+---
+
 ## Session 3 — 2026-04-22 → 2026-04-23
 
 **Model:** Claude Opus 4.7 (1M context) via Claude Code CLI.
