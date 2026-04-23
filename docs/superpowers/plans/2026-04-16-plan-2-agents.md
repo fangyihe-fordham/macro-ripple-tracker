@@ -1548,3 +1548,9 @@ EOF
 - Streamlit rendering of these outputs (Plan 3)
 - Automated evaluation of ripple tree / QA faithfulness (Plan 3 §9)
 - Real-time / incremental (§11.4)
+
+---
+
+## Execution Notes (Session 6)
+
+- **Task 1 Step 1 pin correction:** `langchain-core==0.3.15` is impossible — `langchain-anthropic==0.3.0` requires `langchain-core>=0.3.17`. Bumped to `langchain-core==0.3.17` during execution (smallest change that satisfies the solver). `requirements.txt` reflects this; the `0.3.15` figure in Task 1 Step 1 above is superseded.
