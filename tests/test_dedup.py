@@ -7,10 +7,11 @@ def test_dedup_by_url():
         {"url": "https://a.com/1", "headline": "Iran oil", "snippet": "", "date": "2026-03-01"},
         {"url": "https://a.com/2", "headline": "Different", "snippet": "", "date": "2026-03-01"},
     ]
-    result = deduplicate(articles)
-    assert len(result) == 2
-    urls = [a["url"] for a in result]
+    kept, stats = deduplicate(articles)
+    assert len(kept) == 2
+    urls = [a["url"] for a in kept]
     assert urls == ["https://a.com/1", "https://a.com/2"]
+    assert stats == {"input": 3, "url_dropped": 1, "minhash_dropped": 0, "kept": 2}
 
 
 def test_dedup_by_minhash_near_duplicate():
@@ -28,7 +29,11 @@ def test_dedup_by_minhash_near_duplicate():
          "snippet": "Basketball game coverage from last night",
          "date": "2026-03-01"},
     ]
-    result = deduplicate(articles, minhash_threshold=0.9)
-    assert len(result) == 2
-    headlines = [a["headline"] for a in result]
+    kept, stats = deduplicate(articles, minhash_threshold=0.9)
+    assert len(kept) == 2
+    headlines = [a["headline"] for a in kept]
     assert "Basketball game" in " ".join(headlines) or "sports" in " ".join(headlines).lower()
+    assert stats["input"] == 3
+    assert stats["url_dropped"] == 0
+    assert stats["minhash_dropped"] == 1
+    assert stats["kept"] == 2

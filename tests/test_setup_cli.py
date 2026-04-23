@@ -38,6 +38,9 @@ def test_setup_runs_end_to_end(tmp_data_dir, monkeypatch, fixtures_dir):
     assert manifest["event"] == "iran_war"
     assert manifest["article_count"] == 2
     assert "snapshot_utc" in manifest
+    assert manifest["dedup"]["input"] == 2
+    assert manifest["dedup"]["kept"] == 2
+    assert manifest["missing_tickers"] == []
     assert prices_dir.exists() and len(list(prices_dir.glob("*.csv"))) == 11
 
     from data_news import retrieve

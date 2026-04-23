@@ -1,7 +1,7 @@
 import os
 from datetime import date, timedelta
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 import pandas as pd
 import yfinance as yf
 from config import EventConfig
@@ -22,16 +22,28 @@ def _csv_path(symbol: str) -> Path:
     return _prices_dir() / f"{safe}.csv"
 
 
-def download_prices(cfg: EventConfig) -> None:
-    """Fetch daily OHLCV for each ticker from baseline_date-7 through end_date."""
+def download_prices(cfg: EventConfig) -> List[str]:
+    """Fetch daily OHLCV for each ticker from baseline_date-7 through end_date.
+
+    Returns a list of symbols that yfinance returned empty for — these had no
+    CSV written and will be invisible to get_price_changes. Callers should
+    surface this (e.g. into manifest.json) so silent gaps become visible.
+    """
     start = cfg.baseline_date - timedelta(days=7)
     end = cfg.end_date + timedelta(days=1)
+    missing: List[str] = []
     for ticker in cfg.tickers:
+        # yfinance 0.2.x defaults to MultiIndex columns for single-ticker calls;
+        # multi_level_index=False flattens back to ['Open','Close',...] so CSV
+        # write/read round-trips cleanly. See CLAUDE.md "Library Quirks".
         df = yf.download(ticker.symbol, start=start, end=end, progress=False, auto_adjust=False, multi_level_index=False)
         if df.empty:
+            print(f"[market] {ticker.symbol}: empty response from yfinance; skipping")
+            missing.append(ticker.symbol)
             continue
         df = df.reset_index().rename(columns={"index": "Date"})
         df.to_csv(_csv_path(ticker.symbol), index=False)
+    return missing
 
 
 def _load(symbol: str) -> Optional[pd.DataFrame]:

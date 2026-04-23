@@ -63,3 +63,20 @@ def test_get_price_range(tmp_data_dir, fake_yf):
     # Inclusive on both ends; trading days only (no 2026-03-01 because fixture skips weekend)
     assert list(series.index.date.astype(str)) == ["2026-02-26", "2026-02-27", "2026-03-02", "2026-03-03"]
     assert series.iloc[-1] == pytest.approx(102.30)
+
+
+def test_download_prices_returns_missing_symbols(tmp_data_dir, monkeypatch, fixtures_dir):
+    """Tickers that yfinance returns empty for must surface in the return value, not silent."""
+    cfg = load_event("iran_war")
+    ok_df = pd.read_csv(fixtures_dir / "yf_brent_sample.csv", parse_dates=["Date"]).set_index("Date")
+
+    def selective_download(tickers, start, end, progress=False, auto_adjust=False, **kwargs):
+        # Two specific symbols return empty; everything else returns the fixture.
+        if tickers in {"BZ=F", "CL=F"}:
+            return pd.DataFrame()
+        return ok_df.copy()
+
+    monkeypatch.setattr(data_market.yf, "download", selective_download)
+    missing = data_market.download_prices(cfg)
+    assert set(missing) == {"BZ=F", "CL=F"}
+    assert len(missing) == 2

@@ -56,22 +56,28 @@ def main(argv: List[str] | None = None) -> int:
 
     all_articles = g + n + r
     print(f"[setup] Deduplicating {len(all_articles)} total...")
-    unique = deduplicate(all_articles)
-    print(f"  {len(unique)} unique")
+    unique, dedup_stats = deduplicate(all_articles)
+    print(f"  {len(unique)} unique "
+          f"(url_dropped={dedup_stats['url_dropped']}, "
+          f"minhash_dropped={dedup_stats['minhash_dropped']})")
 
     store.write_articles(unique)
     print("[setup] Indexing into ChromaDB...")
     vector_store.index_articles(unique)
 
     print("[setup] Downloading prices...")
-    data_market.download_prices(cfg)
+    missing_tickers = data_market.download_prices(cfg)
+    if missing_tickers:
+        print(f"[setup] WARNING: {len(missing_tickers)} tickers returned empty: {missing_tickers}")
 
     manifest = {
         "event": cfg.name,
         "snapshot_utc": datetime.now(timezone.utc).isoformat(),
         "article_count": len(unique),
         "source_counts": {"gdelt": len(g), "newsapi": len(n), "rss": len(r)},
+        "dedup": dedup_stats,
         "ticker_count": len(cfg.tickers),
+        "missing_tickers": missing_tickers,
     }
     (_data_dir() / "manifest.json").write_text(json.dumps(manifest, indent=2))
     print(f"[setup] Done. Manifest: {_data_dir() / 'manifest.json'}")
