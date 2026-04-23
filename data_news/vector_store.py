@@ -7,6 +7,7 @@ call `setup.is_setup_in_progress()` before firing up `retrieve()` to avoid
 racing a live rebuild.
 """
 import hashlib
+import logging
 import os
 import shutil
 from pathlib import Path
@@ -16,6 +17,15 @@ import chromadb
 from chromadb.config import Settings
 from chromadb.errors import InvalidCollectionException
 from chromadb.utils import embedding_functions
+
+
+# chromadb 0.5.18's posthog integration is broken at the call-site level:
+# every client/collection op fires a `capture()` with a mismatched positional
+# signature and logs ERROR "capture() takes 1 positional argument but 3 were
+# given". Settings(anonymized_telemetry=False) does NOT prevent the capture
+# attempt — it fires regardless and then fails. The only reliable
+# workaround is to silence the posthog logger directly.
+logging.getLogger("chromadb.telemetry.product.posthog").setLevel(logging.CRITICAL)
 
 
 _COLLECTION = "news"
@@ -46,6 +56,12 @@ def reset() -> None:
     p = _db_dir()
     if p.exists():
         shutil.rmtree(p)
+    # chromadb 0.5.x caches per-path SQLite connections in a SharedSystemClient
+    # singleton; without clearing it, the next PersistentClient(path=p) reuses
+    # a stale handle pointing at the just-deleted DB and fails with
+    # "attempt to write a readonly database" on the next write. Matters
+    # whenever reset() is called more than once in the same process.
+    chromadb.api.client.SharedSystemClient.clear_system_cache()
 
 
 def _collection(create: bool = True):
