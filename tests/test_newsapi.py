@@ -93,3 +93,44 @@ def test_fetch_newsapi_skips_when_window_entirely_before_free_tier(monkeypatch):
     cfg = load_event("iran_war")
     assert newsapi_fetcher.fetch(cfg) == []
     assert called["count"] == 0
+
+
+def test_fetch_newsapi_paginates_until_short_page(monkeypatch, capsys):
+    """Pages 1+2 full (100 each) + page 3 partial (7) → fetcher stops after page 3."""
+    monkeypatch.setenv("NEWSAPI_KEY", "dummy-key")
+    monkeypatch.setattr(newsapi_fetcher, "date", _FixedDate)
+
+    def make_article(i):
+        return {
+            "url": f"https://x.com/{i}", "title": f"headline {i}",
+            "source": {"name": "X"}, "publishedAt": "2026-04-01T00:00:00Z",
+            "description": "", "content": "",
+        }
+
+    pages_seen: list[int] = []
+
+    class FakeClient:
+        def __init__(self, api_key):
+            pass
+
+        def get_everything(self, q, from_param, to, language, page_size, page):
+            pages_seen.append(page)
+            if page == 1:
+                return {"totalResults": 207, "articles": [make_article(i) for i in range(100)]}
+            if page == 2:
+                return {"totalResults": 207, "articles": [make_article(100 + i) for i in range(100)]}
+            if page == 3:
+                return {"totalResults": 207, "articles": [make_article(200 + i) for i in range(7)]}
+            raise AssertionError(f"unexpected page={page}")
+
+    monkeypatch.setattr(newsapi_fetcher, "NewsApiClient", FakeClient)
+    cfg = load_event("iran_war")
+    articles = newsapi_fetcher.fetch(cfg, max_pages=5)
+
+    # Stopped exactly after the short page, did not hit pages 4 or 5.
+    assert pages_seen == [1, 2, 3]
+    assert len(articles) == 207
+
+    # totalResults log printed on the first page.
+    out = capsys.readouterr().out
+    assert "totalResults=207" in out

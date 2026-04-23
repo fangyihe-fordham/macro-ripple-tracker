@@ -111,7 +111,10 @@ def _run(args) -> int:
     print(f"  {len(g)} articles")
 
     print("[setup] Fetching NewsAPI...")
-    n = newsapi_fetcher.fetch(cfg)
+    # max_pages=5 → up to 500 articles (5 × 100 page_size). Free-tier is
+    # 100 req/day, so this is cheap. A single-page fetch (default=1) was
+    # silently truncating every event with >100 matches.
+    n = newsapi_fetcher.fetch(cfg, max_pages=5)
     print(f"  {len(n)} articles")
 
     print("[setup] Fetching RSS...")

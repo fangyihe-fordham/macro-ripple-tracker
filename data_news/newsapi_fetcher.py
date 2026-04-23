@@ -41,6 +41,13 @@ def fetch(cfg: EventConfig, max_pages: int = 1) -> List[Dict]:
                 page=page,
             )
             articles = resp.get("articles", [])
+            if page == 1:
+                total = resp.get("totalResults", 0)
+                print(
+                    f"[newsapi] totalResults={total}; "
+                    f"fetching up to {max_pages} page(s) × 100 "
+                    f"(max reachable on free tier: {min(total, max_pages * 100)})"
+                )
             for a in articles:
                 pub = a.get("publishedAt", "")[:10]
                 results.append({
