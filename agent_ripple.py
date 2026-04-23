@@ -1,22 +1,15 @@
 """M3: Ripple tree generator. Produces a structured multi-level impact tree."""
 import json
-import re
+from datetime import date
 from typing import Dict, List
+
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from llm import get_chat_model
-from prompts import load as load_prompt
 from config import EventConfig
-from data_news import retrieve
-from datetime import date
 from data_market import get_price_changes
-
-
-_FENCE_RE = re.compile(r"^```(?:json)?\s*|\s*```$", re.MULTILINE)
-
-
-def _strip_fences(s: str) -> str:
-    return _FENCE_RE.sub("", s.strip()).strip()
+from data_news import retrieve
+from llm import get_chat_model, strip_fences
+from prompts import load as load_prompt
 
 
 def generate_structure(event_description: str, cfg: EventConfig, max_depth: int = 3) -> Dict:
@@ -30,7 +23,7 @@ def generate_structure(event_description: str, cfg: EventConfig, max_depth: int 
     )
     llm = get_chat_model(temperature=0.2, max_tokens=4096)
     resp = llm.invoke([SystemMessage(content=system), HumanMessage(content=human)])
-    text = _strip_fences(resp.content if isinstance(resp.content, str) else str(resp.content))
+    text = strip_fences(resp.content if isinstance(resp.content, str) else str(resp.content))
     try:
         return json.loads(text)
     except json.JSONDecodeError as e:

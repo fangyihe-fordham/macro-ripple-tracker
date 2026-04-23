@@ -1,24 +1,17 @@
 """M4: LangGraph supervisor. Routes queries to the right sub-agent."""
 import json
-import re
-from typing import Literal, TypedDict, List, Dict
 from datetime import date
+from typing import Dict, List, Literal, TypedDict
 
-from langchain_core.messages import SystemMessage, HumanMessage
-from langgraph.graph import StateGraph, END
+from langchain_core.messages import HumanMessage, SystemMessage
+from langgraph.graph import END, StateGraph
 
-from llm import get_chat_model
-from prompts import load as load_prompt
 from config import EventConfig
+from llm import get_chat_model, strip_fences
+from prompts import load as load_prompt
 
 Intent = Literal["timeline", "ripple", "market", "qa"]
 _VALID_INTENTS = {"timeline", "ripple", "market", "qa"}
-
-_FENCE_RE = re.compile(r"^```(?:json)?\s*|\s*```$", re.MULTILINE)
-
-
-def _strip_fences(s: str) -> str:
-    return _FENCE_RE.sub("", s.strip()).strip()
 
 
 class AgentState(TypedDict, total=False):
@@ -37,7 +30,8 @@ class AgentState(TypedDict, total=False):
 def classify_intent(state: AgentState) -> AgentState:
     """Ask the LLM to classify intent AND extract a focus phrase in one call.
 
-    Returns {"intent", "focus"}. Any parse error or invalid value degrades
+    Returns a partial AgentState ({"intent", "focus"}); LangGraph merges the
+    delta into the full state. Any parse error or invalid value degrades
     gracefully: intent -> "qa", focus -> "". Never raises.
     """
     system = load_prompt("intent_system")
@@ -47,7 +41,7 @@ def classify_intent(state: AgentState) -> AgentState:
     resp = llm.invoke([SystemMessage(content=system),
                        HumanMessage(content=state["query"])])
     raw = resp.content if isinstance(resp.content, str) else str(resp.content)
-    text = _strip_fences(raw)
+    text = strip_fences(raw)
     try:
         parsed = json.loads(text)
     except json.JSONDecodeError:

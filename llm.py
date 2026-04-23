@@ -1,11 +1,20 @@
 """Central LLM client factory. All agents get their chat model from here."""
 import os
+import re
 from dotenv import load_dotenv
 from langchain_anthropic import ChatAnthropic
 
 # override=True because Claude Desktop may export an empty ANTHROPIC_API_KEY
 # in the parent shell; we want the real value from .env to win for live runs.
 load_dotenv(override=True)
+
+_FENCE_RE = re.compile(r"^```(?:json)?\s*|\s*```$", re.MULTILINE)
+
+
+def strip_fences(s: str) -> str:
+    """Strip leading/trailing markdown code fences from LLM output."""
+    return _FENCE_RE.sub("", s.strip()).strip()
+
 
 MODEL_ID = "claude-sonnet-4-6"
 DEFAULT_TEMPERATURE = 0.2
