@@ -100,3 +100,29 @@ def run_news_agent(state: AgentState) -> AgentState:
     except json.JSONDecodeError:
         timeline = []
     return {"news_results": hits, "timeline": timeline}
+
+
+def run_qa_agent(state: AgentState) -> AgentState:
+    hits = retrieve(state["query"], top_k=8)
+    # retrieve() can legitimately return []; respect the grounded-only QA
+    # contract by answering honestly rather than hallucinating.
+    if not hits:
+        return {
+            "news_results": [],
+            "response": {"answer": "No indexed articles match this question.", "citations": []},
+        }
+    snippets = "\n\n".join(
+        f"[{i+1}] url={h.get('url','')} date={h.get('metadata', {}).get('date','')}"
+        f"\nheadline: {h.get('headline','')}\n{h.get('text','')[:600]}"
+        for i, h in enumerate(hits)
+    )
+    system = load_prompt("qa_system")
+    human = f"Question: {state['query']}\n\nArticle snippets:\n{snippets}"
+    llm = get_chat_model(temperature=0.1, max_tokens=1024)
+    resp = llm.invoke([SystemMessage(content=system), HumanMessage(content=human)])
+    text = strip_fences(resp.content if isinstance(resp.content, str) else str(resp.content))
+    try:
+        answer = json.loads(text)
+    except json.JSONDecodeError:
+        answer = {"answer": text.strip(), "citations": []}
+    return {"news_results": hits, "response": answer}

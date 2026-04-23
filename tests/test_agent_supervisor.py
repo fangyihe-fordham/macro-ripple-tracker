@@ -121,3 +121,22 @@ def test_run_news_agent_produces_timeline(monkeypatch):
     assert out["timeline"][0]["date"] == "2026-02-28"
     assert "news_results" in out
     assert len(out["news_results"]) == 2
+
+
+def test_run_qa_agent_grounded_answer(monkeypatch):
+    fake_hits = [
+        {"text": "Brent rose to $111 on 2026-03-04", "url": "u1",
+         "headline": "Brent hits 111", "metadata": {"date": "2026-03-04"}, "score": 0.9},
+    ]
+    monkeypatch.setattr(agent_supervisor, "retrieve", lambda q, top_k: fake_hits)
+    monkeypatch.setattr(agent_supervisor, "get_chat_model", lambda **kw: _FakeLLM([
+        json.dumps({"answer": "Brent hit $111 on March 4.",
+                    "citations": [{"url": "u1", "headline": "Brent hits 111", "date": "2026-03-04"}]})
+    ]))
+    cfg = load_event("iran_war")
+    from datetime import date
+    state = {"query": "How high did Brent go?", "cfg": cfg, "as_of": date(2026, 4, 15)}
+    out = agent_supervisor.run_qa_agent(state)
+    assert out["response"]["answer"].startswith("Brent hit $111")
+    assert out["response"]["citations"][0]["url"] == "u1"
+    assert len(out["news_results"]) == 1
