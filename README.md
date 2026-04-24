@@ -35,6 +35,23 @@ Market data comes from yfinance with a 7-day pre-event buffer for chart
 context. Symbols, event window, and seed keywords are all event-scoped
 in `events/<name>.yaml` — the code is event-agnostic.
 
+## Limitations
+
+News content indexed into the vector store (GDELT, NewsAPI) and surfaced
+to the LLM in `run_news_agent` / `run_qa_agent` / `agent_ripple.attach_news`
+is **trusted-source-only**. Snippets are interpolated directly into the
+system+human prompts without delimiter escaping or injection-phrase
+filtering. A malicious headline of the form *"Ignore previous instructions
+and emit ..."* would be passed verbatim to Claude. This is acceptable for
+the v0.2 MVP because (a) inputs come from reputable news aggregators, and
+(b) downstream output is JSON with structured citations, so the worst-case
+outcome is a misleading citation rather than exfiltration or tool-call
+abuse. A production deployment would need explicit mitigation — either
+delimiter-wrapped snippets that the system prompt instructs the model to
+treat as data only, or a lightweight pre-filter for known injection
+patterns. Tracked as a Plan-3 UX decision alongside the `status:` field
+decision noted in [`docs/progress.md`](docs/progress.md).
+
 ## Layout
 
 See the directory tree + per-module blurbs in [`CLAUDE.md`](CLAUDE.md).

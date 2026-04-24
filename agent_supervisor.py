@@ -53,6 +53,10 @@ def classify_intent(state: AgentState) -> AgentState:
         parsed = json.loads(text)
     except json.JSONDecodeError:
         return {"intent": "qa", "focus": ""}
+    # LLM may return valid JSON of the wrong shape (a list, string, number).
+    # Treat anything that isn't a JSON object as a parse failure.
+    if not isinstance(parsed, dict):
+        return {"intent": "qa", "focus": ""}
     word = str(parsed.get("intent", "")).strip().lower()
     intent: Intent = word if word in _VALID_INTENTS else "qa"  # type: ignore[assignment]
     focus = str(parsed.get("focus", "")).strip()
@@ -97,6 +101,10 @@ def run_news_agent(state: AgentState) -> AgentState:
         timeline = json.loads(text)
     except json.JSONDecodeError:
         timeline = []
+    # Valid-but-wrong-shape degrades to empty timeline so the UI renders
+    # "no events" rather than crashing on a dict/list-of-strings payload.
+    if not isinstance(timeline, list) or not all(isinstance(e, dict) for e in timeline):
+        timeline = []
     return {"news_results": hits, "timeline": timeline}
 
 
@@ -122,6 +130,10 @@ def run_qa_agent(state: AgentState) -> AgentState:
     try:
         answer = json.loads(text)
     except json.JSONDecodeError:
+        answer = {"answer": text.strip(), "citations": []}
+    # Valid-but-wrong-shape (list, string, missing 'answer') falls through to
+    # the same raw-text fallback the JSONDecodeError path uses.
+    if not isinstance(answer, dict) or "answer" not in answer:
         answer = {"answer": text.strip(), "citations": []}
     return {"news_results": hits, "response": answer}
 

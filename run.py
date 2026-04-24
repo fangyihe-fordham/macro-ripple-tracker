@@ -15,8 +15,16 @@ def main(argv=None) -> int:
     p.add_argument("--as-of", default=None, help="YYYY-MM-DD; defaults to event end_date")
     args = p.parse_args(argv)
 
-    cfg = load_event(args.event)
-    as_of = date.fromisoformat(args.as_of) if args.as_of else cfg.end_date
+    try:
+        cfg = load_event(args.event)
+    except FileNotFoundError as e:
+        print(f"error: unknown --event {args.event!r}: {e}", file=sys.stderr)
+        return 2
+    try:
+        as_of = date.fromisoformat(args.as_of) if args.as_of else cfg.end_date
+    except ValueError as e:
+        print(f"error: --as-of must be YYYY-MM-DD ({e})", file=sys.stderr)
+        return 2
     result = agent_supervisor.run(cfg, args.query, as_of=as_of)
 
     out = {k: v for k, v in result.items() if k != "cfg"}

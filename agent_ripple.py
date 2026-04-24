@@ -37,9 +37,9 @@ def attach_news(tree: Dict, top_k: int = 3) -> Dict:
             query = f"{n['sector']} {n['mechanism']}"
             hits = retrieve(query, top_k=top_k)
             n["supporting_news"] = [
-                {"url": h["url"], "headline": h["headline"],
+                {"url": h.get("url", ""), "headline": h.get("headline", ""),
                  "date": h.get("metadata", {}).get("date", ""),
-                 "score": h["score"]}
+                 "score": h.get("score", 0.0)}
                 for h in hits
             ]
             _walk(n.get("children", []))
@@ -57,7 +57,10 @@ def attach_prices(tree: Dict, cfg: EventConfig, as_of: date) -> Dict:
             details = []
             for sym in hints:
                 entry = changes.get(sym)
-                if entry and entry.get("available"):
+                # `available=True` should imply pct_change is numeric, but
+                # guard explicitly — a future divide-by-zero path in
+                # get_price_changes could otherwise make abs(None) crash.
+                if entry and entry.get("available") and entry.get("pct_change") is not None:
                     details.append({"symbol": sym, **entry})
             if details:
                 top = max(details, key=lambda d: abs(d["pct_change"]))
