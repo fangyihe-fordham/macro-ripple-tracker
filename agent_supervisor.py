@@ -94,7 +94,10 @@ def run_news_agent(state: AgentState) -> AgentState:
     )
     system = load_prompt("timeline_system")
     human = f"News snippets:\n{bullets}"
-    llm = get_chat_model(temperature=0.1, max_tokens=2048)
+    # 2048 was truncating non-English LLM output (Arabic tokenizes ~3x denser),
+    # yielding unterminated JSON strings → empty timeline fallback. 4096 gives
+    # headroom even if the model emits both English + translation inline.
+    llm = get_chat_model(temperature=0.1, max_tokens=4096)
     resp = llm.invoke([SystemMessage(content=system), HumanMessage(content=human)])
     text = strip_fences(resp.content if isinstance(resp.content, str) else str(resp.content))
     try:

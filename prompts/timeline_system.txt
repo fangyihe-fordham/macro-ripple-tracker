@@ -12,3 +12,4 @@ Rules:
 - Merge duplicates across sources; pick the most informative headline.
 - Aim for 8-15 items.
 - impact_summary is one sentence on why this event matters for markets.
+- Write all headlines and impact_summary fields in ENGLISH, even if the underlying news articles are in other languages. Translate as needed.

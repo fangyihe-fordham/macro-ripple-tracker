@@ -40,6 +40,12 @@ def main():
         f"Tickers tracked: {len(cfg.tickers)}"
     )
 
+    # LLM calls are stochastic; a flaky run can cache an empty timeline/tree.
+    # This lets the user force a re-run without restarting the process.
+    if st.sidebar.button("Clear cache & refresh"):
+        st.cache_data.clear()
+        st.rerun()
+
     tab1, tab2, tab3, tab4 = st.tabs(["Timeline", "Ripple Tree", "Market", "Ask Anything"])
     from ui.timeline import render as render_timeline
     from ui.ripple import render as render_ripple
