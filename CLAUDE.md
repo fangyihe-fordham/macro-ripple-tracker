@@ -71,7 +71,7 @@ Every task — inline or subagent — must clear all six before being declared d
 
 If a subagent returns green but any criterion above is unmet (e.g. extra files touched, hardcoded values, test-shaped decoration in production code), review and fix in a follow-up commit before moving on.
 
-## Current Directory Structure (real, end of Session 7 — Plan 2 done + hardened)
+## Current Directory Structure (real, end of Session 8 — Plan 2 done + hardened; no code changes in Session 8)
 
 ```
 /Users/fangyihe/appliedfinance/
@@ -147,6 +147,8 @@ If a subagent returns green but any criterion above is unmet (e.g. extra files t
 
 **Test counts:** 64 total → **60 pass + 4 gated-skip** (end of Session 7). 26 more tests than end of Session 4 (19 Plan 2 + 7 Session 7 hardening; zero Plan-1 regressions).
 
+**Commits on `main` added in Session 8:** 0 code commits. Session 8 was a zero-code strategy conversation (Plan 2.5 proposed and rejected on course-constraint grounds); the only Session 8 commit is the wrap-up doc commit touching `CLAUDE.md` + `docs/progress.md`. No tests added/removed; test suite unchanged at 60 + 4 from end of Session 7.
+
 **Commits on `main` added in Session 7 (newest first):**
 **`d98e492`** (fix(plan-2): pre-plan-3 hardening — shape validation + graceful CLI errors).
 
@@ -188,6 +190,54 @@ If a subagent returns green but any criterion above is unmet (e.g. extra files t
 - TruLens continuous eval (§11.5)
 
 If the user asks for any of the above mid-stream, flag the scope conflict before implementing.
+
+### Course Grading Context & Plan 2.5 Rejection (Session 8, 2026-04-24)
+
+**This is a Fordham Applied Finance course project.** The course context is a scope governor, not a preference. Future sessions MUST read this subsection before proposing any data-layer expansion or any output-quality improvement that would consume >30 minutes of user time.
+
+**Course constraint — 100% FREE data sources only.** Not "prefer free," not "free for MVP" — a rule. The professor requires all ingested data to come from free-tier APIs. This **excludes by course rule**, not by MVP priority:
+- Paid NewsAPI tiers (Pro, Business), Mediastack paid, NewsCatcher paid, Bloomberg Terminal API, Refinitiv/Eikon, FactSet.
+- Any commercial full-text article provider.
+- Any "best-effort" scraping strategy that targets ToS-gray domains or content behind soft paywalls — the gradient between "freely accessible" and "technically free-to-read but restricts automated access" is a judgment call the course rule does not permit taking.
+
+**Professor's grading posture (confirmed by user 2026-04-23 in office-hours-style conversation):** *"Just run the pipeline end-to-end. The final output quality doesn't need to be perfect. Limitations just need to be written up."* The grading weights **process correctness + documented honesty** over **output polish**. A transparent, self-aware limitation is an acceptable deliverable — possibly a better deliverable than a half-built mitigation.
+
+**Four deliverables (all required):**
+1. **In-class presentation** — has a dedicated Limitations section.
+2. **Live demo** — audience-facing interactive run of the app.
+3. **Written report** — has a dedicated Limitations section.
+4. **Code repo + README** — current state (end of Session 7): clean, 60+4 tests, ~850 lines production code, README has Limitations section stub that Plan 3 / demo prep should fill in.
+
+**Plan 2.5 (full-text article scraping via `trafilatura` + ChromaDB rebuild) was PROPOSED and REJECTED in Session 8, 2026-04-24.** The rejection is **durable and first-order**. Unless the course constraint itself changes, do NOT re-propose Plan 2.5 in a future session. Three reasons, each independently sufficient:
+
+1. **It would blur the free-data constraint.** Best-effort scraping hits sites on a ToS / paywall gradient. A hard-paywall blacklist (WSJ/FT/NYT/Bloomberg/Economist) is easy. The gray-area middle tier (sites technically free-to-read but restricting automated access) is exactly the judgment call the course rule forbids.
+2. **The grading posture says a documented limitation is an acceptable answer.** Scraping targets a quality dimension the grading does not prioritize. Building it consumes time without moving the grade.
+3. **Time budget.** User's remaining project time is constrained (self-reported in Session 8). Hours are better spent on Plan 3 execution + live-demo rehearsal than on a second data-layer pass.
+
+**If a future session is tempted to re-propose Plan 2.5 "as a small fix":** stop. All three reasons above are first-order concerns, not judgment calls. Re-proposing implicitly asks the user to re-surface the course constraint that was already surfaced — it's a regression in session memory, not new insight.
+
+**What Plan 2.5 would have looked like (archived here so Session 8 discussion is not re-derived from scratch if the course constraint changes):**
+- New module `data_news/scraper.py` wrapping `trafilatura` (open-source Python boilerplate-removal library — `fetch_url` + `extract`). For each article URL surviving dedup: fetch → extract main body → quality filter (length < 500 chars = drop as paywall-teaser / extraction-failure). Articles whose scrape fails retain original headline-only body.
+- Concurrency via `concurrent.futures.ThreadPoolExecutor` with ~10 workers, per-domain rate limiting (>=1s same-domain gap) to avoid triggering HTTP 429.
+- Hard-paywall domain blacklist (WSJ, FT, NYT, Bloomberg, Economist, Barron's) to skip requests that are guaranteed to fail with an aggregated login-wall page.
+- `setup.py` pipeline inserts scraper between `dedup.deduplicate()` and `vector_store.index_articles()`. Adds `scrape_stats: {attempted, succeeded, paywall_detected, failed}` to `manifest.json`.
+- **Vector rebuild required** because embeddings are a function of body text: `vector_store.reset()` clears `data/chroma_db/` + `SharedSystemClient` cache; `index_articles(articles_with_full_text)` re-embeds with the longer bodies under the existing `all-MiniLM-L6-v2` sentence-transformer. Re-embedding ~1400 docs on CPU ≈ 15-30s.
+- **Token-window caveat:** MiniLM has a ~256-token input window — longer `full_text` is silently truncated by sentence-transformers. B-simple variant accepts the truncation (headline + first ~1000 chars still beats headline alone). B-chunked variant splits long articles into ~800-char chunks, each embedded as its own Chroma document with metadata `parent_url` + `chunk_idx`. UI merges same-URL chunks at render time.
+- **Estimated effort at user's measured pace (~15 min/task):** B-simple ~1.5-2h, B-chunked ~3-4h.
+
+**Canonical Limitations paragraph (Session 8, ready to paste into report / presentation / README — DO NOT diverge from this text when Plan 3 edits README's Limitations section):**
+
+> **Data Source Limitation: Article-body Access Constrained by Free-tier APIs.**
+> The ingestion pipeline uses only free-tier data sources (per course constraint). GDELT 2.0's DOC API returns article **metadata only** (URL, headline, domain, publication date) and does not include article body. NewsAPI.org's free tier returns a ~200-character `content` preview, capped at 100 total results per query, within a 30-day lookback window. As a result, the vector index (ChromaDB + `all-MiniLM-L6-v2` embeddings) is built primarily over headlines and short descriptions rather than full article text. This constrains the grounded-QA agent's ability to cite mid-article evidence; it responds honestly when snippet coverage is insufficient. Lifting this limitation would require either (a) full-text scraping — blocked by paywalls on major outlets (WSJ, FT, NYT, Bloomberg) and ToS concerns on others, or (b) a paid news API (Mediastack, NewsCatcher) — excluded by the project's free-only constraint. Both paths are captured in §11.2 "Future Work."
+
+**Live-demo tactic (Session 8 guidance to future UI / demo-prep sessions):** the corpus has visible thin spots; audience-freestyle queries risk exposing them. Pre-select and rehearse 4-5 queries. Good demo-query categories:
+- (a) Queries where the **ripple-tree structure itself** is the deliverable ("show the impact tree for the Hormuz closure") — not citation-deep-dive.
+- (b) Queries that happen to hit the 100 NewsAPI articles with 150-char descriptions (oil / shipping / aluminum / fertilizer topics are NewsAPI-dense in this corpus).
+- (c) Market-only queries that route to `run_market_agent` — pure numerical, zero snippet dependency.
+
+**Avoid demo queries that require mid-article facts** (specific quotes, specific numbers buried inside articles whose headlines don't contain them). These are the thin spots.
+
+**Project memory file (outside repo):** `~/.claude/projects/-Users-fangyihe-appliedfinance/memory/project_grading_and_deliverables.md` mirrors this subsection in condensed form. Future sessions auto-load it via the auto-memory system, so if a session asks "should we add X feature," the memory surfaces the professor's constraint without requiring the user to re-explain. The CLAUDE.md subsection you are reading now is the **authoritative in-repo record**; if the two ever diverge, trust this file and update the memory.
 
 ## Conventions Established in Tasks 1–5 (+ Session 4 hardening + Session 6 Plan 2 + Session 7 pre-Plan-3 hardening)
 
@@ -486,7 +536,7 @@ Green tests from a subagent are *necessary but not sufficient*. Before accepting
 ## How to Resume
 
 1. `cd /Users/fangyihe/appliedfinance`
-2. Read this file (`CLAUDE.md`) and [`docs/progress.md`](docs/progress.md) for what happened last session. **As of end-of-Session-7, the active plan is Plan 3.** Session 6 landed 20 commits completing Plan 2; Session 7 added one pre-Plan-3 hardening commit (`d98e492`) closing three Important + two Minor issues from a comprehensive post-Plan-2 code review. See progress.md Session 7 entry.
+2. Read this file (`CLAUDE.md`) and [`docs/progress.md`](docs/progress.md) for what happened last session. **As of end-of-Session-8, the active plan is Plan 3.** Session 6 landed 20 commits completing Plan 2; Session 7 added one pre-Plan-3 hardening commit (`d98e492`) closing three Important + two Minor issues from a comprehensive post-Plan-2 code review; Session 8 was a zero-code strategy conversation that **explicitly rejected Plan 2.5** (full-text article scraping) on course-constraint grounds and produced the canonical Limitations paragraph for the report / presentation. See progress.md Session 8 + Session 7 entries, and — critically — re-read the new **"Course Grading Context & Plan 2.5 Rejection"** subsection under Scope Lock before proposing any data-layer expansion or any output-quality work that would cost >30 minutes of user time.
 3. Read the active plan file: [`docs/superpowers/plans/2026-04-16-plan-3-ui-eval.md`](docs/superpowers/plans/2026-04-16-plan-3-ui-eval.md). 12 tasks; M5 Streamlit 4-tab UI + §9 evaluation harness.
 4. Sanity-check the environment:
    - `/opt/anaconda3/envs/macro-ripple/bin/pytest -v` → **60 passed, 4 skipped** (end of Session 7). The 4 skipped are `RUN_LIVE=1`-gated: 2 in `tests/test_smoke_live.py` (Plan 1) and 2 in `tests/test_live_agents.py` (Plan 2).

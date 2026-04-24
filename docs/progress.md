@@ -1,5 +1,67 @@
 # Progress Log
 
+## Session 8 — 2026-04-24 (afternoon) — Strategy conversation: Plan 2.5 proposed and rejected
+
+**Model:** Claude Opus 4.7 (1M context) via Claude Code CLI.
+**Scope:** Zero-code strategy session. User asked to (a) confirm the three-plan final product vision, (b) evaluate whether GDELT article bodies could be scraped to improve QA grounding. Surface-level question led to a proposed "Plan 2.5" (full-text scraping via `trafilatura` + ChromaDB rebuild). After the user surfaced the professor's explicit free-data-only course constraint and grading posture, **Plan 2.5 was rejected** in-conversation. Session ended with a pre-written Limitations paragraph delivered to the user (for the report / presentation) and a project memory file saved outside the repo. Tests unchanged at **60 passed + 4 skipped** (no code touched).
+
+**Commit count:** 0 code commits. 1 docs-only wrap-up commit (this one) covers progress.md + CLAUDE.md updates.
+
+### (1) What was completed
+
+**Three-plan vision confirmation (early part of session).** User asked for a plain-language summary of what the MVP is supposed to be, cross-checked against the three plan files. Confirmed alignment with no discrepancies: local Streamlit web app **Macro Event Ripple Tracker**, single-event MVP (2026 Iran War / Strait of Hormuz closure), 4 tabs (timeline, ripple tree, market, QA), LangGraph supervisor + Claude Sonnet 4.6 backend, local-only (no deployment), Week-2 add-on of historical reference corpus (1979 + 1990-91 oil shocks).
+
+**Surfaced a latent data-layer limitation.** Re-read [`data_news/gdelt.py:49-50`](data_news/gdelt.py), [`data_news/newsapi_fetcher.py:72-73`](data_news/newsapi_fetcher.py), [`data_news/vector_store.py:86`](data_news/vector_store.py), [`agent_supervisor.py:111-138`](agent_supervisor.py). Confirmed:
+- **GDELT (~93% of corpus, ~1,300 of 1,387 unique articles):** `snippet=""`, `full_text=""`. GDELT DOC API returns metadata only (URL, title, domain, seendate) — no article body. So the Chroma `body` for these entries is effectively the **headline alone**.
+- **NewsAPI (up to 100 articles):** `snippet=description` (~150 chars), `full_text=content` (truncated at ~200 chars with `[+NNN chars]` suffix on free tier).
+- **QA agent Claude context:** 8 retrieval hits × `text[:600]` per hit — but the `text` IS that thin joined body. Meaning Claude is answering primarily off headlines + ~150-char descriptions for a minority.
+- **Consequence:** the "grounded QA" is lightly grounded. Claude can produce plausible answers, but most of what's "grounded" is just "that headline exists at that URL on that date." Citation URLs are real; mid-article content is NOT well-supported by in-corpus snippets.
+
+**Plan 2.5 proposed and explored in depth before rejection.** Two variants discussed:
+- **B-simple (estimated ~1.5-2h at user's measured pace of ~15 min/task):** new module `data_news/scraper.py` wrapping `trafilatura.fetch_url` + `trafilatura.extract` (open-source boilerplate-removal / Reader-Mode library). Inserted into `setup.py` between `dedup.deduplicate()` and `vector_store.index_articles()`. Per-article best-effort: fetch URL → extract main content → quality filter (length < 500 chars = drop, likely paywall teaser or extraction failure) → update `full_text`. Articles where scrape fails retain original headline-only body. Concurrency via `concurrent.futures.ThreadPoolExecutor` (~10 workers) with per-domain rate limiting (>=1s gap between same-domain requests). Hard-paywall domain blacklist (WSJ/FT/NYT/Bloomberg/Economist) to avoid wasting requests. After scrape, `vector_store.reset()` + `index_articles(articles)` to re-embed. Manifest.json gains `scrape_stats: {attempted, succeeded, paywall_detected, failed}`.
+- **B-chunked (estimated ~3-4h):** same as B-simple but chunk long articles into ~800-char segments before embedding, so MiniLM's 256-token input window doesn't silently truncate. Each chunk becomes its own Chroma document with metadata `parent_url` + `chunk_idx`. UI would merge same-URL chunks when rendering citations.
+
+**Rationale walk-through given to user.** Quantified likely QA gain (~30-50% of articles would pick up 1000-3000 chars of real content — Reuters, AP, BBC, Guardian, Al Jazeera; rest fail at paywalls or SPA-rendered pages). Recalibrated time estimate from "1 day" (my generic-pace assumption) to "~1.5-2h" based on user's Plan 2 data point (15 tasks in 4 hours ≈ 15 min/task).
+
+**Plan 2.5 rejected by user-surfaced context.** User revealed mid-conversation that (a) the professor requires **100% free data sources** as a course **constraint** — not preference, rule; (b) the professor explicitly told the user on 2026-04-23: *"just run the pipeline end-to-end, the final output doesn't need to be perfect, limitations just need to be written up"*; (c) both the presentation and the report have a **dedicated Limitations section**. This changed the cost-benefit: Plan 2.5 would cost time without moving the grade, AND scraping would blur the free-data constraint (some scrape targets are ToS-gray). **Decision:** skip Plan 2.5 permanently, proceed straight to Plan 3, write up the headline-heavy limitation transparently.
+
+**Project memory file saved.** Wrote `~/.claude/projects/-Users-fangyihe-appliedfinance/memory/project_grading_and_deliverables.md` (type: project) + `MEMORY.md` index pointer in the same directory. The memory captures the professor's grading posture, the 4-deliverable shape (presentation, live demo, report, repo+README), the free-data constraint, the Plan 2.5 rejection rationale, and tactical guidance (live-demo query pre-selection). Lives in the user's `~/.claude` memory system, NOT the repo — future sessions in this project auto-load it so they won't re-propose Plan 2.5 or chase features the professor's grading doesn't reward.
+
+**Pre-wrote Limitations paragraph delivered to user** (in conversation, not committed inline). Frames "headline-heavy corpus" as a **deliberate engineering decision respecting the free-tier constraint**, not an oversight. Two forward paths (scraping, paid API) both noted as §11.2 Future Work. Full text now reproduced verbatim in CLAUDE.md's new "Course Grading Context & Plan 2.5 Rejection" subsection under Scope Lock — treated as canonical going forward so Plan 3 README edits don't diverge.
+
+### (2) Deviations from the session ask / brainstorming skill
+
+1. **Did not write a design-spec doc for Plan 2.5 and did not invoke `writing-plans`.** The brainstorming-skill's nominal terminal state is "write a design doc → invoke writing-plans." However the conversation terminated at "reject this idea." Writing a spec for a rejected proposal would create a phantom artifact implying future implementation. Instead, the rejection rationale is recorded in three places: (a) this progress.md entry, (b) the project memory file outside the repo, (c) CLAUDE.md's new Scope Lock subsection. A future session can resurrect Plan 2.5 from those notes if and only if the course constraint changes.
+2. **Did not use `TodoWrite`.** Zero-code strategy conversations do not benefit from task-list tracking. Brainstorming-skill's clarifying-questions flow was followed conversationally (one question at a time, approach comparison, recommendation with rationale).
+3. **Decision made in conversation, not via the formal spec → plan → execute flow.** Appropriate for rejecting a direction; if the decision had been "proceed with Plan 2.5," the flow would have required a spec file and a writing-plans invocation. "Reject" does not.
+
+### (3) What is blocked and on what
+
+**Nothing is blocked.** Plan 3 is fully ready to execute as of end of Session 7 (no Session 8 code changes), with the following Session-8-added clarifications:
+
+- **Plan 2.5 is permanently off the table** for this project under the current course constraint. Do not re-propose in a future session; the rejection is first-order, not tactical.
+- **If Plan 3 §9 evaluation scores reveal QA quality gaps**, those gaps go into the **Limitations section of the report/presentation**, NOT into a remediation plan. This is aligned with the professor's grading posture — documented honesty ≥ output polish.
+- **Live-demo preparation is now a first-class deliverable.** User will pre-select 4-5 queries that hit well-represented areas of the corpus. Consider capturing the pre-selected queries in-repo (e.g. `docs/demo-queries.md` or a section of README) as part of Plan 3 Task M5 (UI) — so future sessions / graders can see the intended demo surface.
+- **The Limitations paragraph is canonical and ready to paste.** If Plan 3 adds or edits language in README's Limitations section, it should reconcile with the canonical text in CLAUDE.md Scope Lock rather than diverge from it.
+
+**Open items carried from Session 7 (unchanged by Session 8):**
+- Live CLI smoke (`run.py` against real Anthropic): still unverified end-to-end. Not a blocker.
+- Plan 3 UX decision #1 (empty-retrieval `status` field on news/qa responses) — to decide during Plan 3 UI tab drafting.
+- Plan 3 UX decision #2 (prompt-injection mitigation for news snippets) — documented in README Limitations; decide before any public-facing deployment.
+
+### Next session — exact next step
+
+**Begin Plan 3 execution** per CLAUDE.md's "How to Resume" pre-Plan-3 checklist. No state change from end of Session 7 on the code side. Checklist:
+
+1. `cd /Users/fangyihe/appliedfinance`
+2. `git status --short` → clean.
+3. `/opt/anaconda3/envs/macro-ripple/bin/pytest -v` → **60 passed + 4 skipped** (unchanged from end of Session 7).
+4. Read [`docs/superpowers/plans/2026-04-16-plan-3-ui-eval.md`](docs/superpowers/plans/2026-04-16-plan-3-ui-eval.md) — 12 tasks, M5 Streamlit 4-tab UI + §9 eval harness.
+5. **NEW (Session 8 add):** Re-read the "Course Grading Context & Plan 2.5 Rejection" subsection in CLAUDE.md's Scope Lock before touching any data-layer or proposing any data-quality features. The auto-loaded project memory mirrors this but the CLAUDE.md subsection is the authoritative in-repo record.
+6. Start Plan 3 Task 1 per the plan file's mode mapping. Inline-mode default for Plan 3 (per CLAUDE.md Working Mode section's Plan 3 guidance).
+
+---
+
 ## Session 7 — 2026-04-24 (morning) — Post-Plan-2 code review + pre-Plan-3 hardening
 
 **Model:** Claude Opus 4.7 (1M context) via Claude Code CLI.
