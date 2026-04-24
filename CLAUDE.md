@@ -13,8 +13,8 @@ Applied Finance course project, v0.2. Agentic RAG that turns a macro/geopolitica
 All saved in `docs/superpowers/plans/`:
 
 - [`2026-04-16-plan-1-data-foundation.md`](docs/superpowers/plans/2026-04-16-plan-1-data-foundation.md) — **DONE + HARDENED (end of Session 4).** 12 tasks + 2 Session-3 infra follow-ups + 15 Session-4 hardening/cleanup commits (8 code-review-driven in Round 1, 6 user-directed in Round 2, 1 regression fix). All Plan 1 verification checklist items still green; live run delivers richer data (1,387 unique articles vs 1,217 in Session 3; retrieval top hit 0.533 vs 0.39).
-- [`2026-04-16-plan-2-agents.md`](docs/superpowers/plans/2026-04-16-plan-2-agents.md) — **DONE + REVIEWED (end of Session 6).** 15 tasks + 2 mid-plan code-review checkpoints (after Task 8 + after Task 13), each producing cleanup commits folded in before continuing. Plan 1 reconciliation (`35f46e2`) + Session-6 additions to plan file footer (`0.3.17` patch bump, `override=True` note, `strip_fences` hoist, Task-8 test snippet correction). Four deliberate deviations from plan text, all user-approved at decision time (see Session 6 progress.md). Suite: 53 passed + 4 skipped.
-- [`2026-04-16-plan-3-ui-eval.md`](docs/superpowers/plans/2026-04-16-plan-3-ui-eval.md) — Not started. 12 tasks. M5 Streamlit 4-tab UI + §9 evaluation harness. **Plan 3 UI should call `setup.is_setup_in_progress()` before triggering `retrieve()` against ChromaDB** — see `vector_store.py` docstring and C4 lock commit `e5a84ad`. **Plan 3 UI should import `llm.get_chat_model()` (not instantiate `ChatAnthropic` directly)** so it inherits Plan 2's `load_dotenv(override=True)` fix for the Claude-Desktop-empty-key quirk — see Library Quirks → `python-dotenv`. **Plan 3 UX decision**: `run_news_agent` / `run_qa_agent` empty-retrieval responses don't currently carry a `status` field; the UI cannot cleanly distinguish "setup.py hasn't run" from "LLM found no answer." Decide whether to add `status: "no_retrieval" | "answered" | "no_answer"` when drafting UI tabs — noted in `docs/progress.md` footer.
+- [`2026-04-16-plan-2-agents.md`](docs/superpowers/plans/2026-04-16-plan-2-agents.md) — **DONE + REVIEWED + HARDENED (end of Session 7).** 15 tasks + 2 mid-plan code-review checkpoints (after Task 8 + after Task 13) + 1 post-completion comprehensive review (Session 7) driving a final hardening commit (`d98e492`). Plan 1 reconciliation (`35f46e2`) + Session-6 additions to plan file footer (`0.3.17` patch bump, `override=True` note, `strip_fences` hoist, Task-8 test snippet correction). Four deliberate deviations from plan text in Session 6, all user-approved at decision time (see progress.md). Session 7 added LLM-JSON shape validation, graceful `run.py` exits, defensive `.get()`/`None` guards in `agent_ripple`, and a README prompt-injection note. Suite: 60 passed + 4 skipped.
+- [`2026-04-16-plan-3-ui-eval.md`](docs/superpowers/plans/2026-04-16-plan-3-ui-eval.md) — Not started. 12 tasks. M5 Streamlit 4-tab UI + §9 evaluation harness. **Plan 3 UI should call `setup.is_setup_in_progress()` before triggering `retrieve()` against ChromaDB** — see `vector_store.py` docstring and C4 lock commit `e5a84ad`. **Plan 3 UI should import `llm.get_chat_model()` (not instantiate `ChatAnthropic` directly)** so it inherits Plan 2's `load_dotenv(override=True)` fix for the Claude-Desktop-empty-key quirk — see Library Quirks → `python-dotenv`. **Two Plan 3 UX decisions pending (in `docs/progress.md` footer and Pre-Plan-3 notes below):** (1) whether `run_news_agent` / `run_qa_agent` should carry a `status: "no_retrieval" | "answered" | "no_answer"` field for empty-retrieval cases (Session-6 surface, Session-7 affirmed); (2) prompt-injection mitigation strategy for news snippets interpolated into LLM prompts — MVP accepts trusted sources, but public deployment or user-input events (§11.1) will need delimiter-wrapping or pre-filtering (Session-7 surface, documented in `README.md` "Limitations").
 
 Execute plans task-by-task. Each task = TDD cycle + a single `git commit`. Do not batch tasks into one commit.
 
@@ -71,7 +71,7 @@ Every task — inline or subagent — must clear all six before being declared d
 
 If a subagent returns green but any criterion above is unmet (e.g. extra files touched, hardcoded values, test-shaped decoration in production code), review and fix in a follow-up commit before moving on.
 
-## Current Directory Structure (real, end of Session 6 — Plan 2 done)
+## Current Directory Structure (real, end of Session 7 — Plan 2 done + hardened)
 
 ```
 /Users/fangyihe/appliedfinance/
@@ -135,6 +135,7 @@ If a subagent returns green but any criterion above is unmet (e.g. extra files t
     ├── test_agent_ripple.py      # [NEW Session 6] 6 tests — structure parse/raise/fence-strip, attach_news recursion, attach_prices max-magnitude+fallback, end-to-end
     ├── test_agent_supervisor.py  # [NEW Session 6] 10 tests — 8 classify_intent examples + 2 fallbacks; market passthrough; ripple focus-vs-display_name branch (x2); news timeline; QA citations; build_graph routing exclusivity; run() helper
     ├── test_live_agents.py       # [NEW Session 6] 2 tests, gated by RUN_LIVE=1 (real Anthropic classify_intent + real generate_ripple_tree)
+    ├── test_run_cli.py           # [NEW Session 7] 3 tests — happy path (mocks agent_supervisor.run) + unknown-event exit 2 + malformed --as-of exit 2
     └── fixtures/
         ├── yf_brent_sample.csv   # sample OHLCV for M2 tests
         ├── gdelt_response.json   # sample GDELT articles
@@ -144,10 +145,13 @@ If a subagent returns green but any criterion above is unmet (e.g. extra files t
         └── intent_examples.json  # [NEW Session 6] 8 (query, intent, focus) tuples for M4 classify_intent sweep
 ```
 
-**Test counts:** 57 total → **53 pass + 4 gated-skip** (end of Session 6). 19 more tests than end of Session 4 (all Plan 2 additions; zero Plan-1 regressions).
+**Test counts:** 64 total → **60 pass + 4 gated-skip** (end of Session 7). 26 more tests than end of Session 4 (19 Plan 2 + 7 Session 7 hardening; zero Plan-1 regressions).
+
+**Commits on `main` added in Session 7 (newest first):**
+**`d98e492`** (fix(plan-2): pre-plan-3 hardening — shape validation + graceful CLI errors).
 
 **Commits on `main` added in Session 6 (newest first, all 20 bolded as session-6 additions):**
-**`b245786`** (test: gated live) → **`db2c339`** (Task 14 run.py) → **`002d5de`** (plan snippet sync) → **`7464292`** (chore: import consolidation) → **`980cfad`** (Task 13) → **`14c6b56`** (Task 12) → **`5e4d5a5`** (Task 11) → **`0aabd63`** (Task 10) → **`907c5c0`** (Task 9) → **`f74284c`** (CLAUDE.md dotenv quirk) → **`3ff4548`** (refactor: strip_fences hoist) → **`1bba33a`** (plan-2 Task 8 snippet amend) → **`939e126`** (Task 8) → **`728b939`** (Task 7) → **`0db7a0d`** (Task 6) → **`f1f2b8b`** (Task 5) → **`b80d3b9`** (Task 4) → **`bb69ed6`** (Task 3) → **`4d61c68`** (Task 2 llm.py) → **`fdf78bf`** (Task 1 deps + prompt loader).
+**`98dbae4`** (docs: session 6 wrap-up) → **`b245786`** (test: gated live) → **`db2c339`** (Task 14 run.py) → **`002d5de`** (plan snippet sync) → **`7464292`** (chore: import consolidation) → **`980cfad`** (Task 13) → **`14c6b56`** (Task 12) → **`5e4d5a5`** (Task 11) → **`0aabd63`** (Task 10) → **`907c5c0`** (Task 9) → **`f74284c`** (CLAUDE.md dotenv quirk) → **`3ff4548`** (refactor: strip_fences hoist) → **`1bba33a`** (plan-2 Task 8 snippet amend) → **`939e126`** (Task 8) → **`728b939`** (Task 7) → **`0db7a0d`** (Task 6) → **`f1f2b8b`** (Task 5) → **`b80d3b9`** (Task 4) → **`bb69ed6`** (Task 3) → **`4d61c68`** (Task 2 llm.py) → **`fdf78bf`** (Task 1 deps + prompt loader).
 
 **Pre-Session-6 commits on `main` (end of Session 5 → end of Session 4, newest first):** `1e70bdd` → `f47e757` → `35f46e2` → `862d263` → `33f88f5` → `0726337` → `90f02db` → `db8beb9` → `5fb2c8c` → `a1138b2` → `e5a84ad` → `15edf56` → `eba54a7` → `36a4d3d` → `62dbc4c` → `45b6157` → `c454c8b` → `ecd92fc` → `aa2f3ea` → `fc3704c` → `3beabee` → `deb4650` → `0b69dbe` → `44e2d12` → `24adb51` → `3e25d3f` → `717d6c2` → `1c0793e` → `d1a23f2` → `b15ba33` → `c3e8fc0` → `60df2ee` → `b4e9fbe` → `d6a9519` → `178f0d0` → `1c5d7ed` → `77bfd0b` → `70e5bc9` → `1a4638a`.
 
@@ -185,7 +189,7 @@ If a subagent returns green but any criterion above is unmet (e.g. extra files t
 
 If the user asks for any of the above mid-stream, flag the scope conflict before implementing.
 
-## Conventions Established in Tasks 1–5 (+ Session 4 hardening + Session 6 Plan 2)
+## Conventions Established in Tasks 1–5 (+ Session 4 hardening + Session 6 Plan 2 + Session 7 pre-Plan-3 hardening)
 
 ### Python
 
@@ -213,12 +217,42 @@ CSVs under `data/prices/` are named via `symbol.replace("=", "_").replace("^", "
   - `get_price_range(symbol, start, end) -> pd.Series` — returns EMPTY `pd.Series(dtype=float)` for BOTH missing CSV and empty date window. Callers must `.empty` check.
 - **Boundary try/except must be PER-ITERATION, not whole-body, when accumulating state.** Session 4 had a regression where `newsapi_fetcher.fetch()`'s whole-body `try/except Exception: return []` discarded page-1's 100 articles when page 2 raised. Fixed (`862d263`) by moving try/except INSIDE the page loop and `break`ing on `NewsAPIException` with `code=='maximumResultsReached'`. Rule of thumb: if you already appended to `results`, don't throw it away because a later iteration fails.
 - **Silence external library log spam at the logger level, not via settings flags.** `chromadb==0.5.18`'s `Settings(anonymized_telemetry=False)` does NOT prevent the telemetry `capture()` call from firing — the call fires, fails with a signature mismatch, and logs ERROR via `chromadb.telemetry.product.posthog`. Only reliable fix: `logging.getLogger("chromadb.telemetry.product.posthog").setLevel(logging.CRITICAL)`. Documented in "Library Quirks → chromadb" below.
-- **Session 6 — LLM error handling is asymmetric by role and deliberate.**
+- **Session 6 — LLM error handling is asymmetric by role and deliberate (updated Session 7 with shape gates).**
   - **`agent_ripple.generate_structure` raises `ValueError("Model did not return valid JSON: ...")`** on parse failure. Rationale: ripple-tree generation is stateless and on demand; a malformed LLM response is worth surfacing loudly so the UI shows an error state rather than a hallucinated structure.
-  - **`agent_supervisor.classify_intent` NEVER raises** — on `json.JSONDecodeError` or invalid intent value, it returns `{"intent": "qa", "focus": ""}` (graceful degradation to the safest worker). Rationale: this runs in the graph's request path; any raise here would bubble out of `app.invoke(...)` and crash `run.py` / `app.py`.
-  - **`agent_supervisor.run_news_agent` on `json.JSONDecodeError` → `timeline = []`.** Soft degradation; UI renders empty timeline.
-  - **`agent_supervisor.run_qa_agent` on `json.JSONDecodeError` → `{"answer": text.strip(), "citations": []}`.** Soft degradation; UI shows the LLM's raw text as the answer with no citations.
+  - **`agent_supervisor.classify_intent` NEVER raises** — on `json.JSONDecodeError`, non-dict JSON, or invalid intent value, it returns `{"intent": "qa", "focus": ""}` (graceful degradation to the safest worker). Rationale: this runs in the graph's request path; any raise here would bubble out of `app.invoke(...)` and crash `run.py` / `app.py`.
+  - **`agent_supervisor.run_news_agent` on `json.JSONDecodeError` OR wrong-shape → `timeline = []`.** Wrong-shape = `timeline` is not `list[dict]`. Soft degradation; UI renders empty timeline. `news_results` still populated.
+  - **`agent_supervisor.run_qa_agent` on `json.JSONDecodeError` OR wrong-shape → `{"answer": text.strip(), "citations": []}`.** Wrong-shape = `answer` is not a dict with an `"answer"` key. Soft degradation; UI shows the LLM's raw text as the answer with no citations.
   - **DO NOT make all four symmetric** — the different failure modes are by design.
+- **Session 7 — LLM-JSON consumer contract: `json.loads` try/except is NOT sufficient — ALWAYS add an `isinstance` shape gate.** Session 7's code review surfaced (and fixed) two real instances of this bug. The LLM returning valid JSON of the wrong shape is a strictly-more-likely failure mode than `JSONDecodeError` for a model instructed to "emit JSON": the model knows how to emit JSON, but may emit a list when you asked for an object (or vice versa) if the prompt is ambiguous. Required pattern:
+  ```python
+  try:
+      parsed = json.loads(strip_fences(text))
+  except json.JSONDecodeError:
+      return <degraded value>
+  if not isinstance(parsed, <expected type>):
+      return <degraded value>
+  # for list-of-dicts:
+  # if not isinstance(parsed, list) or not all(isinstance(e, dict) for e in parsed):
+  # for dict with required key:
+  # if not isinstance(parsed, dict) or "answer" not in parsed:
+  ```
+  All four LLM-JSON call sites (`generate_structure`, `classify_intent`, `run_news_agent`, `run_qa_agent`) now follow this. **Do NOT** broaden the except to `(json.JSONDecodeError, AttributeError, TypeError)` as a shortcut — an explicit `isinstance` gate is self-documenting and catches wrong-element-type inside a valid outer container (which `AttributeError` won't catch until the second level of access).
+- **Session 7 — CLI-boundary error handling: catch the TWO arg-decode exception types, not the rest.** `run.py` catches `FileNotFoundError` from `load_event()` and `ValueError` from `date.fromisoformat()` — these two are the ONLY exceptions that argparse-happy-path code can raise before control reaches `agent_supervisor.run()`. Pattern for any future CLI entrypoint:
+  ```python
+  args = p.parse_args(argv)
+  try:
+      cfg = load_event(args.event)
+  except FileNotFoundError as e:
+      print(f"error: unknown --event {args.event!r}: {e}", file=sys.stderr)
+      return 2
+  try:
+      as_of = date.fromisoformat(args.as_of) if args.as_of else cfg.end_date
+  except ValueError as e:
+      print(f"error: --as-of must be YYYY-MM-DD ({e})", file=sys.stderr)
+      return 2
+  ```
+  Exit code `2` (not 1) matches argparse's own convention for bad-input exits. `print(..., file=sys.stderr)` not `print(..., file=sys.stderr, end="\n")` — the default newline is what you want. **Do NOT wrap the whole `main()` in a top-level `try/except Exception`** — deeper failures (API key missing, network, etc.) should fail loud with a traceback so the user sees where.
+- **Session 7 — defensive `.get()` on external-contract dicts, even when the contract guarantees keys.** `attach_news` in `agent_ripple.py` uses `.get()` on every field from `retrieve()` hits (`url`, `headline`, `score`, `metadata.date`) — even though `retrieve()` always populates them today. Rationale: (1) parity with the existing `metadata.get("date", "")` pattern already in the code; (2) `retrieve()` is crossing a module boundary and the hit shape could change without `attach_news` noticing; (3) silent-empty-string is better than `KeyError` for a Plan-3 UI rendering a tree. Apply the same rule to any `get_price_changes()` / future `data_news.*` consumers.
 - **Session 6 — empty-retrieval short-circuit contract.** `data_news.retrieve()` returns `[]` when the Chroma collection is missing or empty (Plan 1 C3, `vector_store.py:108`). Every LLM-calling consumer MUST check for this and either skip the LLM call or return a deterministic degraded response:
   - `run_news_agent`: `{"news_results": [], "timeline": []}`.
   - `run_qa_agent`: `{"news_results": [], "response": {"answer": "No indexed articles match this question.", "citations": []}}`.
@@ -262,6 +296,9 @@ CSVs under `data/prices/` are named via `symbol.replace("=", "_").replace("^", "
   **If the test only invokes the LLM once per test function**, `lambda **kw: _FakeLLM([reply])` is fine (single-shot). It's specifically the "iterate-and-pop" pattern that requires sharing.
 - **`monkeypatch.setattr(agent_supervisor, "retrieve", ...)` requires `retrieve` to be a module-level name in `agent_supervisor`.** Session 6 consolidated the late `from data_news import retrieve` / `from data_market import get_price_changes` / `from agent_ripple import generate_ripple_tree` imports to the top of `agent_supervisor.py`, with a guard comment (`agent_supervisor.py:11-16`). Do NOT "simplify" to `import data_news` + `data_news.retrieve(...)` inside the function — that would break every monkeypatch in `test_agent_supervisor.py` silently, because `monkeypatch.setattr(agent_supervisor, "retrieve", ...)` would set a new module-level attr that the function's `data_news.retrieve(...)` would ignore.
 - **LangGraph tests that patch node functions must do so BEFORE calling `build_graph()`.** `add_node(name, callable)` captures the callable at build time. If you patch after, the compiled app still holds the unpatched reference. `test_build_graph_routes_by_intent` and `test_run_end_to_end_helper` both patch-then-build; this is the correct order.
+- **Session 7 — CLI entrypoint tests mock the downstream API module, not the network.** `tests/test_run_cli.py::test_cli_happy_path_prints_result_and_returns_zero` does `monkeypatch.setattr(agent_supervisor, "run", lambda cfg, query, as_of: fake_result)` + `capsys.readouterr().out` + `json.loads(out)`. This exercises argparse wiring, exit codes, stdout JSON roundtrip, and the `date` → `.isoformat()` serialization path in `run.py`, WITHOUT ever touching `build_graph()` or the LLM. Pattern for any future CLI entrypoint: mock at the function boundary ONE level below the CLI, not at the HTTP client level.
+- **Session 7 — CLI error-path tests assert `rc != 0` AND stderr substring, not exact message text.** `test_cli_unknown_event_exits_nonzero` asserts `"does_not_exist" in err`; `test_cli_malformed_asof_exits_nonzero` asserts `"as-of" in err.lower() or "iso" in err.lower() or "date" in err.lower()`. Rationale: exact message text changes as we iterate error wording; the contract under test is "user gets actionable feedback + nonzero exit," not "the error message is exactly this string." Don't pin exact messages.
+- **Session 7 — Wrong-shape LLM-JSON tests use `json.dumps(<wrong_shape_value>)` as the canned reply.** `_FakeLLM([json.dumps(["timeline"])])` — valid JSON, wrong shape (list instead of dict). Four instances in `tests/test_agent_supervisor.py`: `test_classify_intent_returns_qa_when_json_is_list`, `test_classify_intent_returns_qa_when_json_is_scalar`, `test_run_news_agent_falls_back_on_wrong_shape_json`, `test_run_qa_agent_falls_back_on_wrong_shape_json`. **Distinct from the pre-existing `test_*_malformed_json_falls_back_*` tests** (which feed `"not json at all"`, triggering `JSONDecodeError`). Both classes of test are required — one covers the parse failure, one covers the shape mismatch. They are NOT redundant.
 
 ### yfinance specifics
 
@@ -449,10 +486,10 @@ Green tests from a subagent are *necessary but not sufficient*. Before accepting
 ## How to Resume
 
 1. `cd /Users/fangyihe/appliedfinance`
-2. Read this file (`CLAUDE.md`) and [`docs/progress.md`](docs/progress.md) for what happened last session. **As of end-of-Session-6, the active plan is Plan 3.** Session 6 landed 20 commits completing Plan 2 end-to-end (see progress.md Session 6 entry).
+2. Read this file (`CLAUDE.md`) and [`docs/progress.md`](docs/progress.md) for what happened last session. **As of end-of-Session-7, the active plan is Plan 3.** Session 6 landed 20 commits completing Plan 2; Session 7 added one pre-Plan-3 hardening commit (`d98e492`) closing three Important + two Minor issues from a comprehensive post-Plan-2 code review. See progress.md Session 7 entry.
 3. Read the active plan file: [`docs/superpowers/plans/2026-04-16-plan-3-ui-eval.md`](docs/superpowers/plans/2026-04-16-plan-3-ui-eval.md). 12 tasks; M5 Streamlit 4-tab UI + §9 evaluation harness.
 4. Sanity-check the environment:
-   - `/opt/anaconda3/envs/macro-ripple/bin/pytest -v` → **53 passed, 4 skipped** (end of Session 6). The 4 skipped are `RUN_LIVE=1`-gated: 2 in `tests/test_smoke_live.py` (Plan 1) and 2 in `tests/test_live_agents.py` (Plan 2).
+   - `/opt/anaconda3/envs/macro-ripple/bin/pytest -v` → **60 passed, 4 skipped** (end of Session 7). The 4 skipped are `RUN_LIVE=1`-gated: 2 in `tests/test_smoke_live.py` (Plan 1) and 2 in `tests/test_live_agents.py` (Plan 2).
    - `/opt/anaconda3/envs/macro-ripple/bin/python -c "import config, os; print(bool(os.environ.get('NEWSAPI_KEY')), bool(os.environ.get('ANTHROPIC_API_KEY')))"` — note that under Claude Desktop, this may print `True False` because the parent shell exports `ANTHROPIC_API_KEY=` (empty) which shadows `.env`. That's only a problem for live runs, not unit tests. To verify the real key is present: `awk -F= '/ANTHROPIC_API_KEY/ {print substr($2,1,15)}' .env` should show `sk-ant-api03-...`. See Library Quirks → `python-dotenv` if you hit this.
    - `git status --short` → clean. If `.env` appears here as untracked, verify it's still ignored by `.gitignore` (line 7) — do NOT stage it.
    - Optional — verify the Plan-1 data is fresh enough for Plan 2/3 to consume: `ls -la data/manifest.json`. If stale or missing, run `/opt/anaconda3/envs/macro-ripple/bin/python setup.py --event iran_war --refresh` (takes ~30–60s, hits live GDELT + NewsAPI + yfinance).
@@ -469,6 +506,12 @@ Green tests from a subagent are *necessary but not sufficient*. Before accepting
   - `llm.get_chat_model(temperature, max_tokens) -> ChatAnthropic` — always use this instead of importing `ChatAnthropic` directly, so the UI inherits the `load_dotenv(override=True)` fix.
   - `llm.strip_fences(s: str) -> str` — reuse for any Plan-3 code that parses LLM JSON output (eval harness, refinement loops). Do not roll a new fence-stripper.
   - `setup.is_setup_in_progress() -> bool` — Plan 3 UI MUST call this before firing any `retrieve()`, to avoid racing a setup.py rebuild. Returns True only while another process holds the `$DATA_DIR/setup.lock` fcntl lock.
-- **Plan 3 UX decision to make (M1/M2 from code review):** `run_news_agent` / `run_qa_agent` empty-retrieval responses don't carry a distinct `status` field. UI can't distinguish "setup.py hasn't run" from "LLM couldn't find an answer." Consider adding `status: "no_retrieval" | "answered" | "no_answer"` when drafting UI tabs — or accept the current jointly-distinguishable shape. Noted at bottom of `docs/progress.md`.
+- **Plan 3 UX decision #1 (from Session 6 code review):** `run_news_agent` / `run_qa_agent` empty-retrieval responses don't carry a distinct `status` field. UI can't distinguish "setup.py hasn't run" from "LLM couldn't find an answer." Consider adding `status: "no_retrieval" | "answered" | "no_answer"` when drafting UI tabs — or accept the current jointly-distinguishable shape. Noted at bottom of `docs/progress.md`.
+- **Plan 3 UX decision #2 (from Session 7 code review):** news snippets (`headline` + `text`) from `retrieve()` are interpolated directly into the system+human prompts in `run_news_agent` / `run_qa_agent` without delimiter escaping or injection-phrase filtering. Acceptable for MVP (trusted sources) but a production deployment needs either (a) delimiter-wrapped snippets that the system prompt instructs the model to treat as data only, (b) a lightweight pre-filter for known injection patterns, or (c) explicit documentation of the risk. Option (c) is currently in the [`README.md`](README.md) "Limitations" section. Decide before any public-facing deployment or before accepting user-provided events (§11.1).
+- **Session 7 — LLM consumer hardening guarantees Plan-3 can rely on:**
+  - `classify_intent` NEVER raises — even on valid-but-non-dict JSON (list/string/number). Safe to call without a top-level `try/except` around `agent_supervisor.run()`.
+  - `run_news_agent` always returns `{"news_results": [...], "timeline": list[dict]}` — never a malformed `timeline`. Plan 3 UI can safely `.iter()` over `timeline` entries expecting them to be dicts.
+  - `run_qa_agent` always returns `{"news_results": [...], "response": {"answer": str, "citations": list}}` — the `answer` key is ALWAYS present, even on worst-case LLM output (raw-text fallback populates it with the model's pre-parse string).
+  - `run.py` returns exit code 2 with stderr message for unknown `--event` or bad `--as-of`. Plan 3 testing / CI scripts can parse stderr substring without catching SystemExit.
 - **Model-ID currency check:** `llm.MODEL_ID = "claude-sonnet-4-6"`. Before running Plan 3 §9 evaluation, confirm this is still the current-generation Sonnet. A model bump is a one-line change but invalidates the quality baselines — re-run eval scripts after any bump.
 - **Historical reference corpus (Week-2 add-on, NOT Plan 3 but adjacent):** `events/historical_reference/` for the 1979 + 1990-91 oil shocks. Curated markdown files, loaded by M3 at generation time as few-shot priors. If Plan 3 adds groundwork for this (e.g. a loader stub), flag it explicitly — it's outside MVP scope.

@@ -1,5 +1,94 @@
 # Progress Log
 
+## Session 7 — 2026-04-24 (morning) — Post-Plan-2 code review + pre-Plan-3 hardening
+
+**Model:** Claude Opus 4.7 (1M context) via Claude Code CLI.
+**Scope:** Comprehensive net-diff code review of Plan 2 (`1e70bdd..b245786`, 20 commits from Session 6) dispatched via `superpowers:code-reviewer`, then a single-commit hardening pass implementing all Important and user-selected Minor recommendations. **No new plan tasks executed.** Test count moved from 53 passed + 4 skipped (end of Session 6) to **60 passed + 4 skipped** (end of Session 7).
+
+**Commit count:** 1 on `main`.
+
+### Commits landed (branch `main`)
+
+| # | Commit | Type | Role |
+|---|---|---|---|
+| 1 | `d98e492` | fix(plan-2) | Pre-Plan-3 hardening — LLM-JSON shape validation (classify_intent + run_news_agent + run_qa_agent), graceful CLI errors (run.py), defensive `.get()` + `pct_change is not None` guards (agent_ripple), prompt-injection note in README Limitations |
+
+### (1) What was completed
+
+**Code review (no commit):** Dispatched `superpowers:code-reviewer` on the Session-6 net diff (`1e70bdd..b245786` = 20 commits, ~851 insertions across 19 files). Asked for net-diff review, code+tests only scope, comprehensive depth with extra weight on Tasks 14–15 (post-Task-13-review landings) and `run.py` (which had zero tests). Reviewer returned:
+- **0 Critical**
+- **3 Important:**
+  - **I1** — `classify_intent` documented as "NEVER raises," but `json.loads` can return a valid non-dict (list / string / number) which then raises `AttributeError` on `parsed.get("intent")`, bubbling out of `app.invoke` and crashing `run.py`.
+  - **I2** — `run.py` stack-traces on unknown `--event` (raw `FileNotFoundError`) and malformed `--as-of` (raw `ValueError`). Also zero test coverage.
+  - **I3** — `run_news_agent` + `run_qa_agent` catch `JSONDecodeError` but not valid-JSON-wrong-shape (e.g. dict where list expected, or list where dict-with-`answer` expected). Propagates malformed state to Plan-3 UI.
+- **7 Minor:** M1 `pct_change=None` implicit coupling; M2 defensive `.get()` parity on retrieve() hits; M3 magic `top_k=20`/`top_k=8`; M4 hardcoded `max_tokens=100` in classify_intent; M5 prompt-injection surface; M6 `children` vs `downstream_sectors` spec/docstring drift; M7 `run.py` output envelope is flat.
+- **Process-level signal:** both Session-6 mid-plan reviews (post-Task-8, post-Task-13) missed I1 and I3 — the valid-but-wrong-shape LLM-JSON class of bugs. Reviewer recommended adding "probe valid-but-wrong-shape LLM output" to Plan-3 review checklists.
+
+**Hardening commit (`d98e492`):** User directed "fix all 3 Important + defensive Minors + document M5 via README; single commit." TDD cycle: 7 failing tests written first (Red), all fixes implemented in one pass (Green), full suite re-run green, single commit. Concrete changes:
+
+Production code:
+- **[`agent_supervisor.py:52-58`](/Users/fangyihe/appliedfinance/agent_supervisor.py)** — `classify_intent` now adds `if not isinstance(parsed, dict): return {"intent": "qa", "focus": ""}` AFTER the `JSONDecodeError` catch. Contract ("never raises") is now actually honored for any LLM response that is valid JSON but not an object.
+- **[`agent_supervisor.py:98-108`](/Users/fangyihe/appliedfinance/agent_supervisor.py)** — `run_news_agent` validates `timeline` is `list[dict]` via `isinstance(timeline, list) and all(isinstance(e, dict) for e in timeline)`; on failure, degrades to `timeline=[]`. `news_results` still populated.
+- **[`agent_supervisor.py:129-138`](/Users/fangyihe/appliedfinance/agent_supervisor.py)** — `run_qa_agent` validates `answer` is `dict` with an `"answer"` key; on failure, falls through to the same raw-text fallback the `JSONDecodeError` path already uses (`{"answer": text.strip(), "citations": []}`).
+- **[`run.py:18-29`](/Users/fangyihe/appliedfinance/run.py)** — catches `FileNotFoundError` around `load_event()` and `ValueError` around `date.fromisoformat()`, prints a one-line stderr message, returns exit code 2. argparse's built-in `--required` error handling for missing flags is untouched.
+- **[`agent_ripple.py:39-44`](/Users/fangyihe/appliedfinance/agent_ripple.py)** — `attach_news` uses `.get()` on `url`/`headline`/`score` from retrieve() hits (`h.get("url", "")`, `h.get("headline", "")`, `h.get("score", 0.0)`) for parity with the existing `.get()` on `metadata.date`.
+- **[`agent_ripple.py:58-63`](/Users/fangyihe/appliedfinance/agent_ripple.py)** — `attach_prices` now checks `entry.get("pct_change") is not None` before appending a ticker's details. Current `get_price_changes` never emits `available=True` with `pct_change=None`, so this is defensive only; a future divide-by-zero path in that function will not crash `attach_prices` via `abs(None)`.
+
+Docs:
+- **[`README.md`](/Users/fangyihe/appliedfinance/README.md)** — new "Limitations" section documenting that news snippets are trusted-source-only and interpolated without delimiter escaping. Flags mitigation (delimiter-wrapped snippets OR pre-filter for known injection patterns) as a Plan-3 UX decision. **No runtime sanitization code added** per user direction.
+
+Tests added (+7 offline, all in tests/):
+- [`tests/test_agent_supervisor.py::test_classify_intent_returns_qa_when_json_is_list`](/Users/fangyihe/appliedfinance/tests/test_agent_supervisor.py) — LLM returns `json.dumps(["timeline"])` → expect `{"intent": "qa", "focus": ""}` (not `AttributeError`).
+- `tests/test_agent_supervisor.py::test_classify_intent_returns_qa_when_json_is_scalar` — LLM returns `json.dumps("timeline")` → expect qa fallback.
+- `tests/test_agent_supervisor.py::test_run_news_agent_falls_back_on_wrong_shape_json` — LLM returns `json.dumps({"not": "a list"})` → expect `timeline=[]` but `news_results` preserved (retrieve hits still returned to caller).
+- `tests/test_agent_supervisor.py::test_run_qa_agent_falls_back_on_wrong_shape_json` — LLM returns `json.dumps(["citation1", "citation2"])` → expect `{"answer": <raw text>, "citations": []}`.
+- [`tests/test_run_cli.py::test_cli_happy_path_prints_result_and_returns_zero`](/Users/fangyihe/appliedfinance/tests/test_run_cli.py) — `monkeypatch.setattr(agent_supervisor, "run", ...)` + `capsys`; assert `main([...])` returns 0 and stdout is valid JSON containing the mocked result.
+- `tests/test_run_cli.py::test_cli_unknown_event_exits_nonzero` — `--event does_not_exist` → exit != 0; stderr contains the event name.
+- `tests/test_run_cli.py::test_cli_malformed_asof_exits_nonzero` — `--as-of not-a-date` → exit != 0; stderr contains at least one of `as-of`/`iso`/`date`.
+
+**Suite snapshot (end of Session 7):** `pytest -v` → 60 passed + 4 skipped in ~7s. Delta from end of Session 6: 53 → 60 (+7 offline, zero regressions). Skipped: same 4 RUN_LIVE-gated tests (2 Plan-1 + 2 Plan-2).
+
+**Live paths STILL not smoke-tested this session** (same as Session 6): `run.py` against real Anthropic + `RUN_LIVE=1 pytest tests/test_live_agents.py`. User still holding to avoid burning API budget on iteration; unit suite validates wiring + shape contracts.
+
+### (2) Deviations from the session ask
+
+**None material.** User's ask was explicit with three defensive-Minor targets (M1 + M2 + "any other one-line defensive additions flagged"). Two interpretation calls, both worth flagging:
+
+1. **Which Minors counted as "defensive"?** Interpreted strictly: **M1 (pct_change=None guard)** and **M2 (.get() parity on retrieve hits)**. Deferred:
+   - M3 (magic `top_k=20`/`top_k=8`): config concern, not defensive. If Plan 3's eval harness wants to sweep retrieval breadth, it becomes a configuration item then.
+   - M4 (hardcoded `max_tokens=100` in classify_intent): same — tunable but not defensive.
+   - M6 (`children` vs `downstream_sectors` spec/docstring drift): it's a spec-text inconsistency, not a code bug. Implementation is consistent throughout (`children` everywhere).
+   - M7 (`run.py` flat output envelope): Plan 3 may want a `{"meta": ..., "result": ...}` wrapper for UI consumption — Plan-3 decision, not Plan-2 defense.
+   If a future session disagrees with this interpretation, the Minor items are all one-line fixes and safe to bundle with the first real Plan-3 commit.
+2. **Test count for run.py CLI — ask was "2-3"; delivered 3** (happy path + 2 error paths). Upper bound because the happy-path test is the ONLY test that exercises the stdout-JSON + exit-0 contract that the error-path tests don't cover. Trimming to 2 would leave a coverage gap.
+
+### (3) What is blocked and on what
+
+**Nothing is blocked on Session 7's work.** Plan 3 is fully ready to execute. Carry-overs from Session 6 still apply:
+
+- **Live CLI smoke is an open item, NOT a blocker:** `run.py --event iran_war --query "..."` has STILL never been run against real Anthropic. Session 7 added 3 CLI tests (offline) plus graceful error exits, so a future live run will fail loudly and cleanly rather than dumping a Python traceback — but the API wiring itself is still unverified end-to-end.
+- **Plan-3 UX decisions, now two of them:**
+  - **(Carried from Session 6)** `run_news_agent` / `run_qa_agent` empty-retrieval `status` field. See "Plan 3 UX decision to make" footer below.
+  - **(New Session 7)** Prompt-injection mitigation for news snippets. Documented in README Limitations as a Plan-3 decision — wrap-in-delimiters vs pre-filter vs accept-risk. Recorded because v0.2 MVP treats trusted sources uncritically and a production deployment must not.
+- **Review-process signal for Plan-3 reviews:** add "probe valid-but-wrong-shape LLM output" to the Plan-3 review checklist. The two Session-6 mid-plan reviews missed I1 and I3 because they focused on structural concerns (imports, strip_fences hoist, LangGraph capture) and assumed `JSONDecodeError` was the whole LLM-parse failure surface. It isn't.
+
+### Pre-Plan-3 checklist (refined from Session 6)
+
+1. `cd /Users/fangyihe/appliedfinance`
+2. `git status --short` → clean.
+3. `/opt/anaconda3/envs/macro-ripple/bin/pytest -v` → **60 passed + 4 skipped**. If fewer, something regressed.
+4. Read Plan 3: [`docs/superpowers/plans/2026-04-16-plan-3-ui-eval.md`](docs/superpowers/plans/2026-04-16-plan-3-ui-eval.md).
+5. Plan-2 surfaces Plan-3 will consume (all current after Session 7 hardening):
+   - `agent_supervisor.run(cfg, query, as_of) -> AgentState` — return keys depend on intent.
+   - `classify_intent({"query": str}) -> {"intent", "focus"}` — **never raises** (now also handles non-dict JSON).
+   - `run_news_agent` / `run_qa_agent` — now shape-validated; degrade to empty timeline / raw-text answer on JSON-shape mismatch.
+   - `agent_ripple.generate_ripple_tree(...)` — tree shape unchanged; defensively `.get()`s retrieve() fields now.
+   - `run.py` — unknown event or bad `--as-of` returns exit code 2 with a stderr message; no more stack traces.
+   - `llm.get_chat_model(...)`, `llm.strip_fences(...)` — use these, don't re-roll.
+   - `setup.is_setup_in_progress()` — check before firing any `retrieve()` in UI.
+
+---
+
 ## Session 6 — 2026-04-23 (evening) — Plan 2 execution (M3 Ripple + M4 Supervisor)
 
 **Model:** Claude Opus 4.7 (1M context) via Claude Code CLI.
