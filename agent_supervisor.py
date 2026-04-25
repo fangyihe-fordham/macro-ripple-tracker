@@ -74,11 +74,18 @@ def run_ripple_agent(state: AgentState) -> AgentState:
     # imperative prefixes ("Show me the ripple tree for...") into the LLM's
     # event_description input.
     event_description = state.get("focus") or state["cfg"].display_name
-    tree = generate_ripple_tree(
-        event_description=event_description,
-        cfg=state["cfg"],
-        as_of=state["as_of"],
-    )
+    try:
+        tree = generate_ripple_tree(
+            event_description=event_description,
+            cfg=state["cfg"],
+            as_of=state["as_of"],
+        )
+    except (ValueError, json.JSONDecodeError) as e:
+        # generate_ripple_tree.generate_structure raises ValueError on
+        # malformed LLM JSON (see agent_ripple.py). Degrade to an empty tree
+        # so the UI can render an explanatory warning instead of 500ing.
+        print(f"[agent_supervisor] ripple generation failed: {e}")
+        tree = {"event": event_description, "nodes": []}
     return {"ripple_tree": tree}
 
 

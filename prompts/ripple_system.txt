@@ -27,3 +27,4 @@ Rules:
 - Aim for 3-6 nodes at tier 1, 2-4 children each at deeper tiers.
 - Do NOT include price_change or supporting_news — those fields are attached
   downstream; your job is the causal structure.
+- Write every "sector" and "mechanism" string in ENGLISH, even if the underlying retrieved news is in other languages. Translate as needed.

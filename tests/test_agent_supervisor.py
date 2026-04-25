@@ -232,3 +232,17 @@ def test_run_end_to_end_helper(monkeypatch):
     out = agent_supervisor.run(cfg, "what happened?", as_of=date(2026, 4, 15))
     assert out["intent"] == "qa"
     assert out["response"]["answer"] == "ok"
+
+
+def test_run_ripple_agent_falls_back_when_generate_raises(monkeypatch):
+    """generate_ripple_tree raising should NOT bubble out of run_ripple_agent —
+    UI renders an empty tree with a warning instead of crashing the whole page."""
+
+    def _boom(*a, **kw):
+        raise ValueError("simulated LLM JSON parse failure")
+
+    monkeypatch.setattr(agent_supervisor, "generate_ripple_tree", _boom)
+    state = {"query": "ripple please", "cfg": object(), "as_of": object(),
+             "focus": "Hormuz closure"}
+    out = agent_supervisor.run_ripple_agent(state)
+    assert out == {"ripple_tree": {"event": "Hormuz closure", "nodes": []}}
