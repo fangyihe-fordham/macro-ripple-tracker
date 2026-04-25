@@ -105,6 +105,17 @@ def test_attach_prices_uses_ticker_hints(monkeypatch, fixtures_dir):
     assert airline["price_change"] is None
 
 
+def test_generate_structure_raises_on_wrong_shape_json(monkeypatch):
+    """An LLM that returns valid JSON of the wrong shape (list, scalar, etc.)
+    must raise ValueError so run_ripple_agent's fallback fires correctly."""
+    import json as _json
+    monkeypatch.setattr(agent_ripple, "get_chat_model",
+                        lambda **kw: _FakeLLM(_json.dumps([{"sector": "Oil"}])))
+    cfg = load_event("iran_war")
+    with pytest.raises(ValueError, match="wrong shape"):
+        agent_ripple.generate_structure("Fake event", cfg, max_depth=2)
+
+
 def test_generate_ripple_tree_end_to_end(monkeypatch, fixtures_dir):
     raw = (fixtures_dir / "ripple_llm_response.json").read_text()
     monkeypatch.setattr(agent_ripple, "get_chat_model", lambda **kw: _FakeLLM(raw))

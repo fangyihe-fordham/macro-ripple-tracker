@@ -25,9 +25,20 @@ def generate_structure(event_description: str, cfg: EventConfig, max_depth: int 
     resp = llm.invoke([SystemMessage(content=system), HumanMessage(content=human)])
     text = strip_fences(resp.content if isinstance(resp.content, str) else str(resp.content))
     try:
-        return json.loads(text)
+        parsed = json.loads(text)
     except json.JSONDecodeError as e:
         raise ValueError(f"Model did not return valid JSON: {e}\nRaw: {text[:500]}") from e
+    # Session-7 isinstance shape gate: an LLM emitting valid JSON of the wrong
+    # shape (e.g. a list of nodes instead of {"event": ..., "nodes": [...]}) is
+    # a strictly-more-likely failure mode than JSONDecodeError. Without this,
+    # attach_news's tree.get('nodes', []) would raise AttributeError on a list,
+    # bypassing run_ripple_agent's (ValueError, JSONDecodeError) catch.
+    if not isinstance(parsed, dict):
+        raise ValueError(
+            f"Model returned valid JSON but wrong shape "
+            f"({type(parsed).__name__}), expected object. Raw: {text[:200]}"
+        )
+    return parsed
 
 
 def attach_news(tree: Dict, top_k: int = 3) -> Dict:
