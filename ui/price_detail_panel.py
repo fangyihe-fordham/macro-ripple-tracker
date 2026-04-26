@@ -9,6 +9,8 @@ from config import EventConfig
 from data_market import get_price_range
 
 
+# Must stay in sync with ui/price_chart._PRIMARY_SYMBOL / _PRIMARY_NAME.
+# A future refactor should hoist these to a shared module (e.g. ui/_constants.py).
 _SYMBOL = "BZ=F"
 _NAME = "Brent Crude Oil"
 
@@ -57,11 +59,20 @@ def _move_metadata(prices: pd.Series, target_iso: str) -> Optional[Dict]:
     if ts not in prices.index:
         return None
     pos = prices.index.get_loc(ts)
+    # pos == 0 means the target IS the baseline date — no prior-day reference
+    # to compute pct_change against. This path is structurally unreachable
+    # from normal UI flow because price_chart.significant_moves uses
+    # pct_change() which puts NaN at index 0, so row 0 never qualifies as
+    # a marker. Defensive guard anyway in case a future caller passes the
+    # baseline date directly.
     if pos == 0:
         return None
     price_to = float(prices.iloc[pos])
     price_from = float(prices.iloc[pos - 1])
-    pct = (price_to / price_from - 1.0) * 100.0 if price_from else 0.0
+    # Explicit `!= 0.0` is more readable than truthiness here — `0.0` is the
+    # only falsy float we want to guard, and this also clarifies that
+    # negative prices (truthy) take the divide path.
+    pct = (price_to / price_from - 1.0) * 100.0 if price_from != 0.0 else 0.0
     return {"price_from": price_from, "price_to": price_to, "pct_change": pct}
 
 
