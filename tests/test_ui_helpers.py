@@ -200,3 +200,45 @@ def test_format_supervisor_result_timeline_bulleted():
     md = sidebar_chat.format_supervisor_result(result)
     assert "2026-03-01" in md
     assert "Iran closes Hormuz" in md
+
+
+def test_ripple_label_truncates_long_sectors():
+    from ui import ripple
+    long_sector = {"sector": "This Is A Very Very Very Long Sector Name",
+                   "severity": "critical", "price_change": 10.0}
+    lbl = ripple._label(long_sector)
+    assert len(lbl) <= 21  # 20 chars + optional ellipsis
+    assert "…" in lbl or lbl.endswith("…")
+    # percentage no longer in label
+    assert "%" not in lbl
+
+
+def test_ripple_label_short_sector_unchanged_no_pct():
+    from ui import ripple
+    n = {"sector": "Oil Supply", "severity": "significant", "price_change": 49.6}
+    assert ripple._label(n) == "Oil Supply"  # price change moved to tooltip
+
+
+def test_ripple_node_size_scales_with_severity():
+    from ui import ripple
+    tree = {"event": "E", "nodes": [
+        {"sector": "A", "severity": "critical", "price_change": 10, "children": []},
+        {"sector": "B", "severity": "significant", "price_change": 5, "children": []},
+        {"sector": "C", "severity": "moderate", "price_change": 2, "children": []},
+    ]}
+    nodes, _ = ripple.tree_to_graph_elements(tree)
+    by_label = {n.label: n for n in nodes}
+    assert by_label["A"].size > by_label["B"].size > by_label["C"].size
+
+
+def test_ripple_node_title_contains_mechanism_and_pct():
+    from ui import ripple
+    tree = {"event": "E", "nodes": [
+        {"sector": "Oil", "mechanism": "Hormuz closure", "severity": "critical",
+         "price_change": 49.6, "children": []},
+    ]}
+    nodes, _ = ripple.tree_to_graph_elements(tree)
+    oil = next(n for n in nodes if n.id != "root")
+    # Plotly/streamlit-agraph uses `title` for hover tooltip text
+    assert "Hormuz closure" in oil.title
+    assert "49" in oil.title  # percentage now in hover, not label

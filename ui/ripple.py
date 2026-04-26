@@ -13,11 +13,33 @@ _SEVERITY_COLORS = {
     "moderate":    "#fbc02d",
 }
 
+_SEVERITY_SIZES = {
+    "critical":    22,
+    "significant": 18,
+    "moderate":    14,
+}
+
+_MAX_LABEL_LEN = 20
+
 
 def _label(node: Dict) -> str:
+    """Sector name, truncated to 20 chars with …. Price change moved to tooltip."""
+    sec = node.get("sector", "?")
+    if len(sec) > _MAX_LABEL_LEN:
+        sec = sec[: _MAX_LABEL_LEN - 1].rstrip() + "…"
+    return sec
+
+
+def _tooltip(node: Dict) -> str:
+    """Hover-only content: mechanism + precise price change."""
+    parts: List[str] = []
+    mech = node.get("mechanism", "")
+    if mech:
+        parts.append(mech)
     pc = node.get("price_change")
-    pc_str = f"  ({pc:+.1f}%)" if isinstance(pc, (int, float)) else ""
-    return f"{node.get('sector','?')}{pc_str}"
+    if isinstance(pc, (int, float)):
+        parts.append(f"Δ {pc:+.1f}%")
+    return " · ".join(parts)
 
 
 def tree_to_graph_elements(tree: Dict) -> Tuple[List[Node], List[Edge]]:
@@ -29,9 +51,11 @@ def tree_to_graph_elements(tree: Dict) -> Tuple[List[Node], List[Edge]]:
         for n in children:
             counter["i"] += 1
             nid = f"n{counter['i']}"
-            color = _SEVERITY_COLORS.get(n.get("severity", "moderate"), "#9e9e9e")
-            nodes.append(Node(id=nid, label=_label(n), size=18, color=color,
-                              title=n.get("mechanism", "")))
+            sev = n.get("severity", "moderate")
+            color = _SEVERITY_COLORS.get(sev, "#9e9e9e")
+            size = _SEVERITY_SIZES.get(sev, 14)
+            nodes.append(Node(id=nid, label=_label(n), size=size, color=color,
+                              title=_tooltip(n)))
             edges.append(Edge(source=parent_id, target=nid))
             _walk(n.get("children", []), nid)
 
