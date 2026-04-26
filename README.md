@@ -17,7 +17,28 @@ conda activate macro-ripple
 cp .env.example .env   # then paste real ANTHROPIC_API_KEY + NEWSAPI_KEY
 python setup.py --event iran_war --refresh
 pytest -v
+
+# Run the UI (single-page event-focused dashboard)
+streamlit run ui_app.py               # → http://localhost:8501
 ```
+
+## Dashboard layout
+
+Single page, no tabs. The layout couples the primary ticker's daily moves
+with the event narrative:
+
+1. **Price chart (Brent crude)** — daily close line with red/green markers
+   on days where |daily %| exceeds the threshold slider. Click a marker to
+   explain that day.
+2. **Detail panel (right)** — structured attribution for the selected day:
+   direction + headline summary + 2–3 drivers + caveats + ≤3 cited news items.
+3. **Event axis** — horizontal time axis with markers aligned to the same
+   dates as the price chart, each labeled with the single most event-defining
+   headline for that date.
+4. **Ripple tree** — hierarchical industry impact graph (severity encoded in
+   color + node size; hover for mechanism + precise % change).
+5. **Sidebar chat** — ask follow-up questions; answers route through the
+   supervisor agent (intent → timeline / market / ripple / qa).
 
 ## Data-source strategy
 
