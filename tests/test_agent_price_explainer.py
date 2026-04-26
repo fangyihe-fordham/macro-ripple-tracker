@@ -95,6 +95,31 @@ def test_wrong_shape_json_falls_back(monkeypatch):
     )
     assert out["direction"] == "down"  # inferred from negative pct_change
     assert "key_drivers" in out and "supporting_news" in out
+    # Fallback should populate supporting_news from same-day close hits
+    # (https://x/1 and https://x/3 are both 2026-03-02 in _SAMPLE_HITS).
+    assert len(out["supporting_news"]) > 0
+    assert out["supporting_news"][0]["url"] in {"https://x/1", "https://x/3"}
+
+
+def test_missing_required_keys_falls_back(monkeypatch):
+    """Valid dict missing one or more required keys must trigger fallback."""
+    monkeypatch.setattr(ape, "retrieve", lambda q, top_k: _SAMPLE_HITS)
+    monkeypatch.setattr(
+        ape, "get_chat_model",
+        lambda **kw: _FakeLLM([json.dumps({"direction": "up",
+                                           "headline_summary": "x"})]),
+    )
+    out = ape.explain_move(
+        target_date=date(2026, 3, 2), symbol="BZ=F", name="Brent Crude Oil",
+        pct_change=2.0, price_from=75.0, price_to=76.5,
+    )
+    # Fell back: direction inferred from pct_change; supporting_news populated
+    # from close hits (since _SAMPLE_HITS has same-day matches for 2026-03-02).
+    assert out["direction"] == "up"
+    assert out["headline_summary"].startswith("Price moved")
+    assert "key_drivers" in out and "caveats" in out
+    assert len(out["supporting_news"]) > 0
+    assert len(out["supporting_news"]) <= 3
 
 
 def test_empty_retrieval_returns_graceful_no_news(monkeypatch):
@@ -109,4 +134,8 @@ def test_empty_retrieval_returns_graceful_no_news(monkeypatch):
     )
     assert out["direction"] == "flat"
     assert out["supporting_news"] == []
+    # On empty retrieval, _fallback returns empty drivers and caveats too —
+    # confirm a future change doesn't accidentally start populating them.
+    assert out["key_drivers"] == []
+    assert out["caveats"] == []
     assert "No indexed" in out["headline_summary"] or "thin" in out["headline_summary"].lower()
