@@ -1,9 +1,23 @@
-"""Streamlit entry: streamlit run ui_app.py"""
+"""Streamlit entry: streamlit run ui_app.py
+
+Single-page event-focused dashboard (Plan 3.5).
+Layout:
+  sidebar: event picker, as-of, metadata, "Clear cache" button, persistent chat
+  main:
+    [ price_chart (70%) | price_detail_panel (30%) ]
+    [ event_axis (full) ]
+    [ ripple tree (full) ]
+"""
 from datetime import date
 from pathlib import Path
 import streamlit as st
 
 from config import load_event, EventConfig
+from ui.price_chart import render as render_price
+from ui.price_detail_panel import render as render_detail
+from ui.event_axis import render as render_event_axis
+from ui.ripple import render as render_ripple
+from ui.sidebar_chat import render as render_chat
 
 
 st.set_page_config(page_title="Macro Event Ripple Tracker", layout="wide")
@@ -18,48 +32,51 @@ def _load_cfg(event_name: str) -> EventConfig:
     return load_event(event_name)
 
 
-def main():
+def main() -> None:
     st.title("Macro Event Ripple Tracker")
+
     events = _discover_events()
     if not events:
         st.error("No event configs found in events/*.yaml")
         return
-    event_name = st.sidebar.selectbox("Event", events, index=0)
+
+    # Sidebar — event controls + metadata
+    event_name = st.sidebar.selectbox("Event", events, index=0, key="event_select")
     cfg = _load_cfg(event_name)
     as_of = st.sidebar.date_input(
-        "As of (for % change vs baseline)",
-        value=cfg.end_date,
-        min_value=cfg.start_date,
-        max_value=cfg.end_date,
+        "As of", value=cfg.end_date,
+        min_value=cfg.start_date, max_value=cfg.end_date, key="as_of_input",
     )
-
     st.sidebar.markdown(
         f"**{cfg.display_name}**\n\n"
         f"Window: {cfg.start_date} → {cfg.end_date}\n\n"
         f"Baseline: {cfg.baseline_date}\n\n"
         f"Tickers tracked: {len(cfg.tickers)}"
     )
-
-    # LLM calls are stochastic; a flaky run can cache an empty timeline/tree.
-    # This lets the user force a re-run without restarting the process.
     if st.sidebar.button("Clear cache & refresh"):
         st.cache_data.clear()
+        # Forget any selected date on a full refresh
+        st.session_state.pop("selected_date", None)
         st.rerun()
 
-    tab1, tab2, tab3, tab4 = st.tabs(["Timeline", "Ripple Tree", "Market", "Ask Anything"])
-    from ui.timeline import render as render_timeline
-    from ui.ripple import render as render_ripple
-    from ui.market import render as render_market
-    from ui.qa import render as render_qa
+    # Reset selected_date if the event changed, so clicks from a prior event
+    # don't surface on the new one.
+    if st.session_state.get("_last_event") != event_name:
+        st.session_state.pop("selected_date", None)
+        st.session_state["_last_event"] = event_name
 
-    with tab1:
-        render_timeline(cfg, as_of)
-    with tab2:
-        render_ripple(cfg, as_of)
-    with tab3:
-        render_market(cfg, as_of)
-    with tab4:
-        render_qa(cfg, as_of)
+    # Main — three vertical zones
+    col_chart, col_detail = st.columns([7, 3], gap="medium")
+    with col_chart:
+        render_price(cfg, as_of)
+    with col_detail:
+        render_detail(cfg, as_of)
+
+    render_event_axis(cfg, as_of)
+    render_ripple(cfg, as_of)
+
+    # Sidebar chat last so it renders below the metadata
+    render_chat(cfg, as_of)
 
 
 if __name__ == "__main__":
