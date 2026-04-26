@@ -98,3 +98,39 @@ def test_build_figure_pct_mode_markers_use_pct_values():
     assert all(math.isfinite(v) for v in ys), f"non-finite marker y values: {ys}"
     assert ys[0] == pytest.approx(7.26)
     assert ys[1] == pytest.approx(12.31)
+
+
+def test_format_detail_markdown_renders_all_sections():
+    from ui import price_detail_panel as pdp
+    attribution = {
+        "direction": "up",
+        "headline_summary": "Brent rallied on Hormuz closure.",
+        "key_drivers": ["Strait of Hormuz closed", "Speculative long flows"],
+        "caveats": ["SUMED pipeline partial bypass available."],
+        "supporting_news": [
+            {"url": "https://x/1", "headline": "Brent hits $88", "date": "2026-03-02"},
+            {"url": "https://x/2", "headline": "Oil analysts revise", "date": "2026-03-02"},
+        ],
+    }
+    md = pdp.format_detail_markdown(attribution, target_date="2026-03-02",
+                                    symbol="BZ=F", pct_change=7.26)
+    assert "2026-03-02" in md
+    assert "▲" in md or "up" in md.lower()
+    assert "Brent rallied" in md
+    assert "Strait of Hormuz closed" in md
+    assert "SUMED" in md
+    assert "https://x/1" in md and "https://x/2" in md
+
+
+def test_format_detail_markdown_down_arrow_for_negative():
+    from ui import price_detail_panel as pdp
+    attribution = {
+        "direction": "down", "headline_summary": "Oil fell on diplomacy.",
+        "key_drivers": ["US-Iran talks resumed"],
+        "caveats": [],
+        "supporting_news": [],
+    }
+    md = pdp.format_detail_markdown(attribution, target_date="2026-04-14",
+                                    symbol="BZ=F", pct_change=-3.1)
+    assert "▼" in md or "down" in md.lower()
+    assert "-3.1" in md or "−3.1" in md
