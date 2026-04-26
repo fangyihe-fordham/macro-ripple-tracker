@@ -8,11 +8,11 @@ Layout:
     [ event_axis (full) ]
     [ ripple tree (full) ]
 """
-from datetime import date
 from pathlib import Path
 import streamlit as st
 
 from config import load_event, EventConfig
+from setup import is_setup_in_progress
 from ui.price_chart import render as render_price
 from ui.price_detail_panel import render as render_detail
 from ui.event_axis import render as render_event_axis
@@ -27,7 +27,7 @@ def _discover_events() -> list[str]:
     return [p.stem for p in Path("events").glob("*.yaml")]
 
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(show_spinner=False, ttl=3600)
 def _load_cfg(event_name: str) -> EventConfig:
     return load_event(event_name)
 
@@ -39,6 +39,13 @@ def main() -> None:
     if not events:
         st.error("No event configs found in events/*.yaml")
         return
+
+    # Don't fire any retrieve() calls while setup.py is rebuilding the
+    # ChromaDB collection — they'd race the rebuild and return empty,
+    # silently misleading the user. Documented in CLAUDE.md.
+    if is_setup_in_progress():
+        st.warning("Data refresh in progress — please wait a moment and reload.")
+        st.stop()
 
     # Sidebar — event controls + metadata
     event_name = st.sidebar.selectbox("Event", events, index=0, key="event_select")

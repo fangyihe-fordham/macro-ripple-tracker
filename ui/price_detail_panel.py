@@ -7,12 +7,9 @@ import streamlit as st
 from agent_price_explainer import explain_move
 from config import EventConfig
 from data_market import get_price_range
-
-
-# Must stay in sync with ui/price_chart._PRIMARY_SYMBOL / _PRIMARY_NAME.
-# A future refactor should hoist these to a shared module (e.g. ui/_constants.py).
-_SYMBOL = "BZ=F"
-_NAME = "Brent Crude Oil"
+# Single-source the primary-ticker constants from ui.price_chart so this
+# panel never drifts from Viz 1.
+from ui.price_chart import _PRIMARY_SYMBOL as _SYMBOL, _PRIMARY_NAME as _NAME
 
 
 def format_detail_markdown(attr: Dict, target_date: str, symbol: str, pct_change: float) -> str:
