@@ -134,3 +134,26 @@ def test_format_detail_markdown_down_arrow_for_negative():
                                     symbol="BZ=F", pct_change=-3.1)
     assert "▼" in md or "down" in md.lower()
     assert "-3.1" in md or "−3.1" in md
+
+
+def test_pick_headline_for_date_prefers_causal_keywords():
+    from ui import event_axis
+    target = "2026-03-02"
+    hits = [
+        {"headline": "Analyst view: oil still volatile", "text": "...",
+         "metadata": {"date": "2026-03-02"}, "score": 0.4},
+        {"headline": "Iran declares Strait of Hormuz closed",
+         "text": "Iran announced the immediate closure...",
+         "metadata": {"date": "2026-03-02"}, "score": 0.9},
+        {"headline": "Brent traders react",
+         "text": "Trading volumes spiked...",
+         "metadata": {"date": "2026-03-02"}, "score": 0.6},
+    ]
+    h = event_axis.pick_headline_for_date(hits, target)
+    assert "Hormuz" in h["headline"]  # causal keyword wins over score
+
+
+def test_pick_headline_for_date_returns_none_when_no_match():
+    from ui import event_axis
+    hits = [{"headline": "x", "text": "x", "metadata": {"date": "2026-02-15"}, "score": 0.5}]
+    assert event_axis.pick_headline_for_date(hits, "2026-03-02") is None
