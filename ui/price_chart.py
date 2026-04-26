@@ -1,5 +1,5 @@
 from datetime import date
-from typing import Dict, List, Optional
+from typing import Dict, List, Literal, Optional
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -41,15 +41,22 @@ def significant_moves(prices: pd.Series, threshold_pct: float = _DEFAULT_THRESHO
 def to_pct_series(prices: pd.Series, baseline: date) -> pd.Series:
     """Convert a price series to % change relative to baseline-date price.
 
-    If the baseline date isn't in the index, fall back to the first row."""
+    If the baseline date isn't in the index, fall back to the first row and
+    print a one-line warning so the operator notices an inaccurate anchor."""
     if prices.empty:
         return prices
     bts = pd.Timestamp(baseline)
-    base_price = prices.loc[bts] if bts in prices.index else prices.iloc[0]
+    if bts in prices.index:
+        base_price = prices.loc[bts]
+    else:
+        base_price = prices.iloc[0]
+        print(f"[price_chart] baseline {baseline} not in price index; "
+              f"using earliest available {prices.index[0].date()} as baseline anchor")
     return ((prices / base_price) - 1.0) * 100.0
 
 
-def build_figure(prices: pd.Series, moves: List[Dict], y_mode: str, title: str) -> go.Figure:
+def build_figure(prices: pd.Series, moves: List[Dict],
+                 y_mode: Literal["price", "pct"], title: str) -> go.Figure:
     """y_mode: 'price' | 'pct'. Returns a Plotly figure with two traces:
     'price' or '% vs baseline' (line), and 'markers' (colored dots)."""
     fig = go.Figure()
@@ -69,7 +76,11 @@ def build_figure(prices: pd.Series, moves: List[Dict], y_mode: str, title: str) 
         if y_mode == "price":
             ys = [m["price"] for m in moves]
         else:
-            ys = [float(prices.loc[x] / prices.iloc[0] * 100.0 - 100.0) for x in xs]
+            # In pct mode, `prices` is the already-converted % series
+            # (to_pct_series called by render() before reaching here).
+            # iloc[0] is exactly 0.0 by construction, so re-dividing by it
+            # would produce inf. Use the % values directly.
+            ys = [float(prices.loc[x]) for x in xs]
         colors = [_UP_COLOR if m["direction"] == "up" else _DOWN_COLOR for m in moves]
         hover = [f"{m['date']}  {m['pct_change']:+.2f}%<br>(click for details)" for m in moves]
         fig.add_trace(go.Scatter(

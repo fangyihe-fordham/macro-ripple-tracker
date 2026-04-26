@@ -78,3 +78,23 @@ def test_build_figure_has_line_and_marker_traces():
     # colors array should be same length as markers' x
     if len(markers_trace.x) > 0:
         assert len(markers_trace.marker.color) == len(markers_trace.x)
+
+
+def test_build_figure_pct_mode_markers_use_pct_values():
+    """pct-mode markers must use the already-converted % values directly,
+    not re-divide by iloc[0] (which is 0.0 in a pct series → inf)."""
+    from ui import price_chart
+    import math
+    idx = pd.to_datetime(["2026-02-27", "2026-03-02", "2026-03-03"])
+    pct_series = pd.Series([0.0, 7.26, 12.31], index=idx)
+    moves = [
+        {"date": "2026-03-02", "pct_change": 7.26, "price": 77.74, "direction": "up"},
+        {"date": "2026-03-03", "pct_change": 4.71, "price": 81.40, "direction": "up"},
+    ]
+    fig = price_chart.build_figure(pct_series, moves, y_mode="pct", title="x")
+    markers = next(t for t in fig.data if t.name == "markers")
+    # Each marker y must be finite and equal to the pct_series value at that date
+    ys = list(markers.y)
+    assert all(math.isfinite(v) for v in ys), f"non-finite marker y values: {ys}"
+    assert ys[0] == pytest.approx(7.26)
+    assert ys[1] == pytest.approx(12.31)
