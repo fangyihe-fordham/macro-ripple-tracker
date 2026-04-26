@@ -14,7 +14,9 @@ All saved in `docs/superpowers/plans/`:
 
 - [`2026-04-16-plan-1-data-foundation.md`](docs/superpowers/plans/2026-04-16-plan-1-data-foundation.md) — **DONE + HARDENED (end of Session 4).** 12 tasks + 2 Session-3 infra follow-ups + 15 Session-4 hardening/cleanup commits (8 code-review-driven in Round 1, 6 user-directed in Round 2, 1 regression fix). All Plan 1 verification checklist items still green; live run delivers richer data (1,387 unique articles vs 1,217 in Session 3; retrieval top hit 0.533 vs 0.39).
 - [`2026-04-16-plan-2-agents.md`](docs/superpowers/plans/2026-04-16-plan-2-agents.md) — **DONE + REVIEWED + HARDENED (end of Session 7).** 15 tasks + 2 mid-plan code-review checkpoints (after Task 8 + after Task 13) + 1 post-completion comprehensive review (Session 7) driving a final hardening commit (`d98e492`). Plan 1 reconciliation (`35f46e2`) + Session-6 additions to plan file footer (`0.3.17` patch bump, `override=True` note, `strip_fences` hoist, Task-8 test snippet correction). Four deliberate deviations from plan text in Session 6, all user-approved at decision time (see progress.md). Session 7 added LLM-JSON shape validation, graceful `run.py` exits, defensive `.get()`/`None` guards in `agent_ripple`, and a README prompt-injection note. Suite: 60 passed + 4 skipped.
-- [`2026-04-16-plan-3-ui-eval.md`](docs/superpowers/plans/2026-04-16-plan-3-ui-eval.md) — Not started. 12 tasks. M5 Streamlit 4-tab UI + §9 evaluation harness. **Plan 3 UI should call `setup.is_setup_in_progress()` before triggering `retrieve()` against ChromaDB** — see `vector_store.py` docstring and C4 lock commit `e5a84ad`. **Plan 3 UI should import `llm.get_chat_model()` (not instantiate `ChatAnthropic` directly)** so it inherits Plan 2's `load_dotenv(override=True)` fix for the Claude-Desktop-empty-key quirk — see Library Quirks → `python-dotenv`. **Two Plan 3 UX decisions pending (in `docs/progress.md` footer and Pre-Plan-3 notes below):** (1) whether `run_news_agent` / `run_qa_agent` should carry a `status: "no_retrieval" | "answered" | "no_answer"` field for empty-retrieval cases (Session-6 surface, Session-7 affirmed); (2) prompt-injection mitigation strategy for news snippets interpolated into LLM prompts — MVP accepts trusted sources, but public deployment or user-input events (§11.1) will need delimiter-wrapping or pre-filtering (Session-7 surface, documented in `README.md` "Limitations").
+- [`2026-04-16-plan-3-ui-eval.md`](docs/superpowers/plans/2026-04-16-plan-3-ui-eval.md) — **Tasks 1–3 DONE inline (Session 9, commits `1c0e0fa` → `c750b01` + Timeline-bug fix `a835bf0`); Tasks 4–5 SUPERSEDED by Plan 3.5; Tasks 6–12 (eval harness §9) NOT STARTED.** Plan 3 UI should call `setup.is_setup_in_progress()` before triggering `retrieve()` against ChromaDB — see `vector_store.py` docstring and C4 lock commit `e5a84ad`. Plan 3 UI must import `llm.get_chat_model()` (not instantiate `ChatAnthropic` directly) so it inherits Plan 2's `load_dotenv(override=True)` fix for the Claude-Desktop-empty-key quirk — see Library Quirks → `python-dotenv`. **Two Plan 3 UX decisions** (carried into Plan 3.5/3.6): (1) `status` field on news/qa empty-retrieval responses, (2) prompt-injection mitigation for news snippets — both still in `README.md` "Limitations" as deferred items.
+- [`2026-04-24-plan-3.5-ui-redesign.md`](docs/superpowers/plans/2026-04-24-plan-3.5-ui-redesign.md) — **DONE + REVIEWED (end of Session 9).** 9 tasks, executed via subagent-driven mode → 16 commits on `main` (`7b8f6a1` → `4b102aa`). Replaces 4-tab dashboard with single-page event-focused dashboard: sidebar (event picker + as-of + metadata + chat) + main `[ price_chart 70% | detail_panel 30% ]` + `event_axis` full + `ripple_tree` full. New leaf agent `agent_price_explainer.py` + `prompts/price_explainer_system.txt`. Carryover hardening landed: ripple agent now has English-only prompt + graceful `try/except` in `run_ripple_agent` (`7b8f6a1` + `2c94a5e`). Suite: 85 passed + 4 skipped. **Three live UX failures discovered in Plan 3.5's UI** are addressed in Plan 3.6 below — do NOT treat Plan 3.5 as production-ready; only Plan 3.6 makes the UI demo-ready.
+- [`2026-04-26-plan-3.6-ui-interaction-fixes.md`](docs/superpowers/plans/2026-04-26-plan-3.6-ui-interaction-fixes.md) — **WRITTEN, NOT EXECUTED (end of Session 9).** 3 tasks fixing the three Plan 3.5 UI failures: (1) real click handler via `streamlit-plotly-events` (Plan 3.5's spec deviation #1 dropping this dep was empirically wrong — see Library Quirks → `streamlit-plotly-events`); (2) staggered timeline labels (alternating top/bottom annotations + vertical stems, replacing Plotly's `mode="markers+text"` text-stack); (3) ripple-click → event-axis sector-mode wiring (`agraph()` returns clicked node id; `tree_to_graph_elements` extended to return `(nodes, edges, id_map)`; new `selected_sector` session-state key). End-state target: 89 passed + 4 skipped. **User has the plan to review before execution.**
 
 Execute plans task-by-task. Each task = TDD cycle + a single `git commit`. Do not batch tasks into one commit.
 
@@ -71,26 +73,27 @@ Every task — inline or subagent — must clear all six before being declared d
 
 If a subagent returns green but any criterion above is unmet (e.g. extra files touched, hardcoded values, test-shaped decoration in production code), review and fix in a follow-up commit before moving on.
 
-## Current Directory Structure (real, end of Session 8 — Plan 2 done + hardened; no code changes in Session 8)
+## Current Directory Structure (real, end of Session 9 — Plan 3 Tasks 1–3 + Plan 3.5 done; Plan 3.6 written-not-executed)
 
 ```
 /Users/fangyihe/appliedfinance/
 ├── CLAUDE.md                     # ← this file
-├── README.md                     # data-source strategy + quickstart (added Session 4, R2-T2)
+├── README.md                     # data-source strategy + quickstart + Plan-3.5 "Dashboard layout" section
 ├── MacroRippleTracker_Spec_v0.2.docx
 ├── environment.yml               # conda spec
-├── requirements.txt              # pinned deps (yfinance 0.2.66 + langchain 0.3.7 / langchain-core 0.3.17 / langchain-anthropic 0.3.0 / langgraph 0.3.0 as of Session 6)
+├── requirements.txt              # pinned deps; Session-9 added: streamlit==1.39.0 + plotly==5.24.1 + streamlit-agraph==0.0.45
 ├── .gitignore                    # includes `.env` and `data/`
 ├── .env                          # gitignored — NEWSAPI_KEY, ANTHROPIC_API_KEY (both populated)
 ├── .env.example                  # committed template — same keys, empty values
 ├── config.py                     # EventConfig pydantic (MUTABLE); load_event() calls load_dotenv() WITHOUT override (tests monkeypatch env vars before importing)
-├── llm.py                        # [NEW Session 6] ChatAnthropic factory pinned to claude-sonnet-4-6; strip_fences() utility; load_dotenv(override=True) — Claude Desktop can export empty ANTHROPIC_API_KEY
-├── agent_ripple.py               # [NEW Session 6] M3 three-phase ripple tree generator: generate_structure → attach_news → attach_prices; public entrypoint generate_ripple_tree()
-├── agent_supervisor.py           # [NEW Session 6] M4 LangGraph supervisor; AgentState TypedDict; 5 nodes (classify_intent + 4 workers); build_graph() + run(); late imports consolidated to top with monkeypatch-contract comment
-├── run.py                        # [NEW Session 6] CLI wrapper (argparse --event/--query/--as-of) → agent_supervisor.run() → JSON stdout
+├── llm.py                        # ChatAnthropic factory pinned to claude-sonnet-4-6; strip_fences() utility; load_dotenv(override=True) — Claude Desktop can export empty ANTHROPIC_API_KEY
+├── agent_ripple.py               # M3 three-phase ripple tree generator: generate_structure (Session-9 +isinstance shape gate `2c94a5e`) → attach_news → attach_prices; public entrypoint generate_ripple_tree()
+├── agent_supervisor.py           # M4 LangGraph supervisor; AgentState TypedDict; 5 nodes; Session-9: max_tokens 2048→4096 in run_news_agent (`a835bf0`); run_ripple_agent now wraps generate_ripple_tree in try/except (ValueError, JSONDecodeError) → graceful empty tree (`7b8f6a1`)
+├── agent_price_explainer.py      # [NEW Session 9, Plan-3.5] Leaf agent for "why did <ticker> move on <date>?". Retrieves news ±3 days from target date, asks LLM for {direction, headline_summary, key_drivers, caveats, supporting_news}; never raises; falls back to raw news on parse/shape failure. Hardened from day one with English-only prompt + try/except + isinstance shape gate.
+├── run.py                        # CLI wrapper (argparse --event/--query/--as-of) → agent_supervisor.run() → JSON stdout
 ├── data_market.py                # M2: download_prices, get_price_on_date, get_price_changes (always keyed by ALL cfg.tickers with `available` flag), get_price_range
 ├── setup.py                      # orchestrator CLI: fcntl-locked (setup.lock); --refresh wipes prices/+articles.json+chroma_db; exports is_setup_in_progress()
-├── data_news/                    # M1 news package
+├── data_news/                    # M1 news package (unchanged in Session 9)
 │   ├── __init__.py               # re-exports retrieve, index_articles, reset, read_articles, write_articles
 │   ├── gdelt.py                  # 7-day chunk pagination (num_records=250, 2s sleep, per-chunk try/except — load-bearing)
 │   ├── newsapi_fetcher.py        # 30-day clamp + per-page try/except + 100-total-cap detection via NewsAPIException code
@@ -98,56 +101,75 @@ If a subagent returns green but any criterion above is unmet (e.g. extra files t
 │   ├── dedup.py                  # URL dedup → MinHash LSH (threshold 0.95; returns (kept, stats))
 │   ├── store.py                  # articles.json read/write via DATA_DIR env var
 │   └── vector_store.py           # ChromaDB + MiniLM; telemetry logger silenced at module load; reset() clears SharedSystemClient cache; sha1 stable IDs
-├── prompts/                      # [NEW Session 6] file-backed prompts
-│   ├── __init__.py               # load(name) reads prompts/<name>.txt and .strip()s; used by agent_ripple + agent_supervisor
-│   ├── ripple_system.txt         # M3 ripple tree JSON schema prompt; {max_depth} placeholder filled by .replace() at call time
-│   ├── intent_system.txt         # M4 intent classifier — emits JSON {intent, focus}; "focus rules" strip imperative verbs
-│   ├── timeline_system.txt       # M4 news/timeline — emits JSON list of {date, headline, impact_summary}
-│   └── qa_system.txt             # M4 grounded QA — emits JSON {answer, citations}; cites snippet URLs only
+├── prompts/                      # file-backed prompts
+│   ├── __init__.py               # load(name) reads prompts/<name>.txt and .strip()s
+│   ├── ripple_system.txt         # M3 ripple tree JSON schema prompt; {max_depth} placeholder; Session-9 adds English-only rule
+│   ├── intent_system.txt         # M4 intent classifier — emits JSON {intent, focus}
+│   ├── timeline_system.txt       # M4 news/timeline — emits JSON list; Session-9 adds English-only rule (`a835bf0`)
+│   ├── qa_system.txt             # M4 grounded QA — emits JSON {answer, citations}; cites snippet URLs only
+│   └── price_explainer_system.txt # [NEW Session 9] M3.5 per-day price attribution; English-only; structured 5-key JSON
+├── ui/                           # [NEW Session 9, Plan-3.5] Streamlit modular UI (single-page event-focused dashboard)
+│   ├── __init__.py               # empty
+│   ├── price_chart.py            # Viz 1: Brent line + significant-move markers + y-toggle ($ / %) + threshold slider; CURRENTLY uses st.plotly_chart(on_select="rerun") — DOES NOT FIRE on default Pan tool, only on box/lasso (Plan 3.6 Task 1 swaps to streamlit-plotly-events)
+│   ├── price_detail_panel.py     # Zone 3: reads st.session_state["selected_date"] → calls agent_price_explainer.explain_move via @st.cache_data wrapper → renders ▲/▼ + summary + drivers + caveats + ≤3 cited news
+│   ├── event_axis.py             # Viz 2: horizontal time axis with markers at significant-move dates; CURRENT layout uses Plotly mode="markers+text" → labels stack on dense data (Plan 3.6 Task 2 rewrites with alternating top/bottom annotations + stems)
+│   ├── sidebar_chat.py           # Persistent chat in sidebar; calls agent_supervisor.run; format_supervisor_result() intent-branches for qa/market/timeline/ripple
+│   └── ripple.py                 # M5 ripple tree (streamlit-agraph); 20-char label truncation + pct-in-tooltip + size-by-severity (critical=22/significant=18/moderate=14); CURRENT tree_to_graph_elements returns 2-tuple (nodes, edges) — agraph() return value DISCARDED, so node clicks do nothing (Plan 3.6 Task 3 extends to 3-tuple with id_map and captures clicks)
+├── ui_app.py                     # [REWRITTEN Session 9] Single-page event-focused dashboard shell. 2-col top: [price_chart 70% | detail_panel 30%]; below: event_axis full-width; below: ripple_tree full-width; sidebar: event picker + as-of + metadata + "Clear cache & refresh" + persistent chat. Resets selected_date on event switch.
 ├── events/
-│   └── iran_war.yaml             # RSS feeds deprecated (empty list) — GDELT covers same publications
+│   └── iran_war.yaml             # RSS feeds deprecated (empty list)
 ├── data/                         # runtime, gitignored; populated by setup.py run
-│   ├── articles.json             # ~1,387 unique articles after cross-source dedup (Session 4 baseline)
+│   ├── articles.json             # ~1,387 unique articles after cross-source dedup
 │   ├── prices/*.csv              # 11 files, one per cfg.tickers entry
 │   ├── chroma_db/                # persistent MiniLM vector index
 │   ├── manifest.json             # event, snapshot_utc, article_count, source_counts, dedup, ticker_count, missing_tickers
 │   └── setup.lock                # fcntl lock file; presence + non-free state = setup.py is running
 ├── docs/
-│   ├── progress.md               # session log (Sessions 1–6)
+│   ├── progress.md               # session log (Sessions 1–9)
 │   └── superpowers/plans/
-│       ├── 2026-04-16-plan-1-data-foundation.md  # DONE + hardened
-│       ├── 2026-04-16-plan-2-agents.md           # DONE + reviewed (Session 6)
-│       └── 2026-04-16-plan-3-ui-eval.md          # next
+│       ├── 2026-04-16-plan-1-data-foundation.md     # DONE + hardened
+│       ├── 2026-04-16-plan-2-agents.md              # DONE + reviewed (Session 6)
+│       ├── 2026-04-16-plan-3-ui-eval.md             # Tasks 1-3 DONE inline, Tasks 4-5 SUPERSEDED by Plan 3.5, Tasks 6-12 NOT STARTED
+│       ├── 2026-04-24-plan-3.5-ui-redesign.md       # [NEW Session 9] DONE via subagent-driven (16 commits)
+│       └── 2026-04-26-plan-3.6-ui-interaction-fixes.md  # [NEW Session 9] WRITTEN, NOT EXECUTED (3 tasks; ~5h target; user reviewing)
 └── tests/
     ├── __init__.py               # empty
     ├── conftest.py               # fixtures_dir, tmp_data_dir (sets DATA_DIR env)
     ├── test_config.py            # 3 tests
-    ├── test_data_market.py       # 8 tests — incl. _WARNED_MISSING log-once, download_prices missing return, get_price_changes available-flag contract
+    ├── test_data_market.py       # 8 tests
     ├── test_gdelt.py             # 3 tests (incl. chunk-failure resilience; monkeypatches gdelt.time.sleep)
-    ├── test_newsapi.py           # 6 tests — +30d-clamp assertions, +far-future short-circuit, +pagination stop-on-short-page, +free-tier 100-cap regression
-    ├── test_rss.py               # 3 tests — keyword filter + script/style/comment stripping + case-insensitive newline-spanning
-    ├── test_dedup.py             # 2 tests (unpacks new (kept, stats) return + asserts stats shape)
+    ├── test_newsapi.py           # 6 tests
+    ├── test_rss.py               # 3 tests
+    ├── test_dedup.py             # 2 tests
     ├── test_store.py             # 2 tests
-    ├── test_vector_store.py      # 4 tests — +C3 surface-errors-not-silent-empty, +I5 stable-IDs-across-runs
-    ├── test_setup_cli.py         # 3 tests — end-to-end + --refresh-wipes-stale + fcntl-lock-blocks-concurrent (subprocess-based)
-    ├── test_smoke_live.py        # 2 tests, gated by RUN_LIVE=1 (real GDELT + yfinance SPY)
-    ├── test_llm.py               # [NEW Session 6] 3 tests — MODEL_ID, requires-API-key raise, returns-ChatAnthropic-class
-    ├── test_agent_ripple.py      # [NEW Session 6] 6 tests — structure parse/raise/fence-strip, attach_news recursion, attach_prices max-magnitude+fallback, end-to-end
-    ├── test_agent_supervisor.py  # [NEW Session 6] 10 tests — 8 classify_intent examples + 2 fallbacks; market passthrough; ripple focus-vs-display_name branch (x2); news timeline; QA citations; build_graph routing exclusivity; run() helper
-    ├── test_live_agents.py       # [NEW Session 6] 2 tests, gated by RUN_LIVE=1 (real Anthropic classify_intent + real generate_ripple_tree)
-    ├── test_run_cli.py           # [NEW Session 7] 3 tests — happy path (mocks agent_supervisor.run) + unknown-event exit 2 + malformed --as-of exit 2
+    ├── test_vector_store.py      # 4 tests
+    ├── test_setup_cli.py         # 3 tests
+    ├── test_smoke_live.py        # 2 tests, gated by RUN_LIVE=1
+    ├── test_llm.py               # 3 tests
+    ├── test_agent_ripple.py      # 6 tests + 1 Session-9 hardening test (`2c94a5e`) on isinstance shape gate
+    ├── test_agent_supervisor.py  # 10 + 2 Session-9 tests: ripple-fallback path (`7b8f6a1`) + ?? for graceful run_ripple_agent
+    ├── test_live_agents.py       # 2 tests, gated by RUN_LIVE=1
+    ├── test_run_cli.py           # 3 tests
+    ├── test_agent_price_explainer.py  # [NEW Session 9] 5 tests (filter-by-date, happy-path, malformed-JSON fallback, wrong-shape fallback, empty-retrieval graceful) + 2 follow-up tightening tests (`bc78f03`)
+    ├── test_ui_helpers.py        # [Session 9 evolves] start: timeline + ripple (Plan-3 Tasks 2/3); after Plan 3.5: ripple + price_chart (4) + price_detail_panel (2) + event_axis (2) + sidebar_chat (3) + ripple-polish (4); timeline test was DELETED when ui/timeline.py was deleted in Plan 3.5
     └── fixtures/
-        ├── yf_brent_sample.csv   # sample OHLCV for M2 tests
-        ├── gdelt_response.json   # sample GDELT articles
-        ├── newsapi_response.json # sample NewsAPI /v2/everything payload
-        ├── rss_sample.xml        # 3-item RSS 2.0 feed (rss-3 now contains <p><a>...</a></p>&nbsp; to exercise _strip_html)
-        ├── ripple_llm_response.json  # [NEW Session 6] canned LLM JSON for M3 structure tests (3 top-level nodes; 2 children under Oil Supply)
-        └── intent_examples.json  # [NEW Session 6] 8 (query, intent, focus) tuples for M4 classify_intent sweep
+        ├── yf_brent_sample.csv
+        ├── gdelt_response.json
+        ├── newsapi_response.json
+        ├── rss_sample.xml
+        ├── ripple_llm_response.json
+        └── intent_examples.json
 ```
 
-**Test counts:** 64 total → **60 pass + 4 gated-skip** (end of Session 7). 26 more tests than end of Session 4 (19 Plan 2 + 7 Session 7 hardening; zero Plan-1 regressions).
+**Test counts:** 89 collected → **85 pass + 4 gated-skip** (end of Session 9). 25 more tests than end of Session 8 (60 pass): +1 timeline (Plan 3 Task 2) +1 ripple (Plan 3 Task 3) +1 ripple-fallback (Plan 3.5 Task 1) +1 isinstance shape gate (Plan 3.5 Task 1 follow-up) +5 agent_price_explainer (Plan 3.5 Task 2) +2 price_explainer tightening (`bc78f03`) +4 price_chart helpers (Plan 3.5 Task 3) +2 price_chart pct-mode regression (`2d56cc5`) +2 price_detail_panel (Plan 3.5 Task 4) +2 event_axis (Plan 3.5 Task 5) +3 sidebar_chat (Plan 3.5 Task 6) +4 ripple-polish (Plan 3.5 Task 7) −1 timeline-deleted (Plan 3.5 Task 8) = +25 net.
 
-**Commits on `main` added in Session 8:** 0 code commits. Session 8 was a zero-code strategy conversation (Plan 2.5 proposed and rejected on course-constraint grounds); the only Session 8 commit is the wrap-up doc commit touching `CLAUDE.md` + `docs/progress.md`. No tests added/removed; test suite unchanged at 60 + 4 from end of Session 7.
+**Modules deleted in Session 9 (Plan 3.5 Task 8 single-page rewrite):** `ui/timeline.py` (superseded by `event_axis.py` for narrative timeline), `ui/market.py` (stub never implemented; `price_chart.py` covers Brent specifically + `sidebar_chat.py` market-intent route covers ad-hoc), `ui/qa.py` (stub never implemented; `sidebar_chat.py` is the chat surface). Their corresponding tests were deleted (timeline) or never existed (market, qa).
+
+**Commits on `main` added in Session 9 (newest first):** `4b102aa` (post-Plan-3.5 review cleanups) → `f4483c2` (README update) → `a4db058` (Task 8 single-page shell) → `154f490` (Task 7 ripple polish) → `f4f6f20` (Task 6 fix: None pct guard) → `5905649` (Task 6 sidebar_chat) → `5a368fc` (Task 5 follow-up: color import) → `1713b6b` (Task 5 event_axis) → `46a357c` (Task 4 follow-up: readability) → `a73ab81` (Task 4 price_detail_panel) → `2d56cc5` (Task 3 follow-up: pct-mode div-by-zero) → `e4bd3be` (Task 3 price_chart) → `bc78f03` (Task 2 follow-up: tighten fallback tests) → `4935e01` (Task 2 agent_price_explainer) → `2c94a5e` (Task 1 follow-up: isinstance shape gate) → `7b8f6a1` (Task 1 ripple harden) → `c750b01` (Plan-3 Task 3 ripple) → `a835bf0` (Plan-3 Task 2 timeline-bug fix) → `f5178a6` (Plan-3 Task 2 timeline) → `1c0e0fa` (Plan-3 Task 1 shell). 20 commits total since end of Session 8 (`ab18138`).
+
+**Commits on `main` added in Session 8:** 0 code commits.
+
+**Commits on `main` added in Session 7 (newest first):** **`d98e492`**.
 
 **Commits on `main` added in Session 7 (newest first):**
 **`d98e492`** (fix(plan-2): pre-plan-3 hardening — shape validation + graceful CLI errors).
@@ -239,7 +261,23 @@ If the user asks for any of the above mid-stream, flag the scope conflict before
 
 **Project memory file (outside repo):** `~/.claude/projects/-Users-fangyihe-appliedfinance/memory/project_grading_and_deliverables.md` mirrors this subsection in condensed form. Future sessions auto-load it via the auto-memory system, so if a session asks "should we add X feature," the memory surfaces the professor's constraint without requiring the user to re-explain. The CLAUDE.md subsection you are reading now is the **authoritative in-repo record**; if the two ever diverge, trust this file and update the memory.
 
-## Conventions Established in Tasks 1–5 (+ Session 4 hardening + Session 6 Plan 2 + Session 7 pre-Plan-3 hardening)
+## Conventions Established in Tasks 1–5 (+ Session 4 hardening + Session 6 Plan 2 + Session 7 pre-Plan-3 hardening + Session 9 Plan 3 / 3.5 / 3.6)
+
+### UI Conventions (Session 9 — Plan 3 / 3.5 / 3.6)
+
+- **Modular UI under `ui/`.** One Streamlit zone per file: `ui/price_chart.py`, `ui/price_detail_panel.py`, `ui/event_axis.py`, `ui/sidebar_chat.py`, `ui/ripple.py`. Each module exports `render(cfg: EventConfig, as_of: date) -> None`. `ui_app.py` is a thin shell that imports each module's `render` and composes the layout via `st.columns([7, 3])` etc. **Do not consolidate** modules — each is small and unit-testable in isolation.
+- **All `@st.cache_data`-wrapped functions taking `EventConfig` use `_cfg` (leading underscore).** See Library Quirks → `streamlit==1.39.0`. Failing this raises `UnhashableParamError` at first call. If you add a new cached function, repeat the convention.
+- **Pure-function helpers TDD'd; rendering visually smoked.** Every UI module has unit tests on its pure helpers (`significant_moves`, `to_pct_series`, `_label_y_for_index`, `pick_headline_for_date`, `format_supervisor_result`, `format_detail_markdown`, `tree_to_graph_elements`, `_sector_to_annotated`, `_click_event_to_iso`). The `render(cfg, as_of)` Streamlit-context function itself is NOT unit-tested (its body interleaves `st.*` calls with helper calls); visual smoke in a `streamlit run` is the verification.
+- **Session-state lifecycle discipline.** Every `selected_*` key in `st.session_state` MUST be `pop()`'d in two places: (1) the event-switch reset block (`if st.session_state.get("_last_event") != event_name`); (2) the "Clear cache & refresh" sidebar button. New keys requiring this convention: `selected_date` (Plan 3.5), `selected_sector` (Plan 3.6). The `chat_history` list is exempt (per Plan 3.5 spec — chat is independent of chart state, persists across event switches).
+- **LLM-touching cached functions need short retry escape valves.** LLM calls flake; `@st.cache_data` locks in flakes for the TTL window. Convention: every Streamlit app that consumes LLMs needs a sidebar "Clear cache & refresh" button (Plan 3 Task-2 follow-up established this; Plan 3.5 preserved it). For demo, this is the user's single recovery action.
+- **Plan-↔-API real-fire smoke required for UI-event APIs.** `inspect.signature` showing a kwarg present is necessary but not sufficient. Before locking a UI-event choice (`on_select`, `plotly_events`, `agraph` return) into a plan, run a manual `streamlit run` and trigger the gesture. Plan 3.5 spec deviation #1 missed this and shipped a UI where clicks didn't fire. Lesson cost: one full plan cycle (Plan 3.6).
+- **Capture component return values even when unused.** `streamlit-agraph.agraph(...)` returns the clicked node id; Plan 3.5 ignored the return and node clicks did nothing. Convention: any component that returns a value MUST be assigned to a named variable, even if the variable goes unused for now. Discoverable failure beats silent failure.
+- **Imports of Streamlit-frontend components scoped INSIDE `render()`.** `streamlit_plotly_events` and similar packages emit `ScriptRunContext` warnings at import time when no Streamlit runtime is active (e.g. during pytest collection). Lazy-import inside the function that uses them. Module-top imports are fine for `streamlit` itself, `streamlit_agraph` (no warning), and `plotly`.
+
+### Plan execution mode lessons (Session 9)
+
+- **Subagent-driven mode produces N main commits + occasional follow-up commits.** Plan 3.5 had 9 tasks, executed via subagent-driven, produced 16 commits on `main`. Excess came from inter-task code-review-driven follow-ups (the CLAUDE.md "Corrective workflow when a smell is found" pattern). Net behavior matched the plan; the commit count is honest about the iteration cycle. **Do not budget a 1:1 task:commit ratio for subagent-driven execution** — 1.5-1.8:1 is realistic with code-review checkpoints.
+- **Plan-spec test-count predictions can drift by ±5 from actuals.** Plan 3.5 forecast 82 passed; actual was 85 (+3 from subagent-led tightening). This is a positive signal (bonus tests added); track in the wrap-up but do not retroactively edit the plan. Convention: plan task expected-pytest counts are forecasts, not contracts. The verification checklist's "all green" is the contract.
 
 ### Python
 
@@ -483,6 +521,40 @@ Things to know:
   - stream node outputs (use `app.stream(...)` not `app.invoke(...)` if Plan 3 UI wants progressive updates).
   - cache results across invocations (every `run()` call rebuilds the graph via `build_graph()`; cheap but not free — ~10ms per invocation).
 
+### `streamlit==1.39.0` (Session 9, Plan 3 / 3.5 / 3.6)
+
+- **`@st.cache_data` cannot hash pydantic v2 `EventConfig` (or any non-frozen pydantic model).** Pydantic v2 sets `__hash__ = None` on non-frozen models, which makes them unhashable. `@st.cache_data` raises `streamlit.runtime.caching.cache_errors.UnhashableParamError` with a message pointing at "add a leading underscore to the argument's name." **Convention:** any cached function that takes an `EventConfig` MUST name the parameter `_cfg` (leading underscore). This tells Streamlit "skip hashing this arg." Cache key then keys only on the OTHER args (e.g. `as_of`). Cache discrimination across events is naturally upstream because `_load_cfg(event_name)` in `ui_app.py` is itself `@st.cache_data`-wrapped and returns the same `EventConfig` instance per event. Applies to: `ui/timeline.py:fetch_timeline` (now deleted), `ui/ripple.py:fetch_tree`, `ui/price_chart.py:_load_prices`, `ui/event_axis.py:_headline_for`, `ui/price_detail_panel.py:_cached_explain`. Discovered Session 9 Plan-3 Task 2 first try; if you add `EventConfig` to a future cached function, repeat the underscore.
+- **`@st.cache_data` caches empty results — LLM flakes get locked in for the TTL window.** Symptom (Session 9 timeline-bug): the FIRST call hit the LLM during a flake, returned `[]`, and that empty got cached for `ttl=3600`. Every subsequent browser refresh hit the cache and never re-tried the LLM. The user saw "No timeline items generated" for an hour despite valid backend state. **Three mitigations now applied across the codebase:**
+  - **English-only instruction in every prompt** that emits structured JSON. The original symptom was the LLM mirroring Arabic-language source articles → Arabic output → Arabic tokenizes ~3× denser than English → JSON truncated mid-string at `max_tokens=2048` → `JSONDecodeError: Unterminated string` → Session-7 shape-gate falls back to `[]`.
+  - **`max_tokens` ≥ 4096 in `run_news_agent`** (was 2048 — too tight for non-English fallthrough).
+  - **"Clear cache & refresh" sidebar button** in `ui_app.py` calling `st.cache_data.clear() + st.session_state.pop(...) + st.rerun()`. This is the demo-day escape valve when a flake locks the cache.
+- **Streamlit's in-process `MemoryCacheStorageManager` survives browser refresh.** Without a Streamlit runtime, `@st.cache_data` falls through to `MemoryCacheStorageManager` (visible warning: `No runtime found, using MemoryCacheStorageManager`). This is per-process and survives ALL browser actions short of restarting the `streamlit run` process. To clear: explicit `st.cache_data.clear()` call (the new sidebar button), or kill+restart the Streamlit process. **Browser refresh DOES NOT flush the cache** — a common debugging false trail.
+- **`st.plotly_chart(on_select="rerun", selection_mode="points")` ONLY fires on box-select / lasso-select, NOT on a plain marker click.** Plan 3.5 dropped `streamlit-plotly-events` based on `inspect.signature(st.plotly_chart)` showing `on_select` and `selection_mode` params present in 1.39 — a real but **insufficient** signal. The API exists. The params accept the values. The gesture **does not fire** unless the user activates the modebar's box-select or lasso-select tool. The default Pan tool produces no event. Plan 3.5 Phase-3 shipped a UI where clicking markers showed the hover but never set `selected_date`; Plan 3.6 Task 1 fixes by re-adding `streamlit-plotly-events==0.0.6`. **General lesson — applies to any future UI-event API choice: presence of an API in `inspect.signature` is not a sufficient design check. Manually trigger the target gesture in a `streamlit run`-ed app before locking the API choice into a plan.**
+- **`st.session_state` keys need explicit lifecycle discipline.** Streamlit does NOT clear `st.session_state` on event switch, browser refresh, or any user action short of process restart. Convention established Session 9 Plan-3.5/3.6:
+  - Every `selected_*` key must be `pop()`'d when the user switches events (`if st.session_state.get("_last_event") != event_name`)
+  - Every `selected_*` key must be `pop()`'d in the "Clear cache & refresh" button alongside `st.cache_data.clear()`
+  - Current keys (Plan 3.5): `selected_date` (price_chart writes; price_detail_panel reads), `chat_history` (sidebar_chat owns); after Plan 3.6: `selected_sector` (ripple writes; event_axis reads). Each new key requires updates in BOTH the event-switch reset block AND the cache-clear block in `ui_app.py:main()`.
+- **`streamlit-plotly-events` import scoped INSIDE `render()` not at module top.** Importing `streamlit_plotly_events` at module load time emits `Streamlit ScriptRunContext` warnings during pytest collection. Keeping the import inside `render()` (where it only fires under live Streamlit) keeps `pytest -v` quiet. Convention: any third-party Streamlit-frontend component that emits load-time logs should be lazy-imported inside the function that calls it.
+
+### `streamlit-agraph==0.0.45` (Session 9, Plan 3 / 3.5 / 3.6)
+
+- **`agraph(nodes, edges, config)` RETURNS the clicked node's id as a string (or `None`).** Verified by reading `streamlit_agraph/__init__.py:38-39`: `component_value = _agraph(...)`. The returned value IS the click signal — Plan 3.5 Task 8 wrote `agraph(...)` ignoring the return, which is why ripple node clicks did nothing. Plan 3.6 Task 3 captures it: `clicked_id = agraph(nodes=nodes, edges=edges, config=cfg_graph)`. **Convention going forward:** any new Streamlit component that returns a value should at minimum capture it into a named variable, even when not yet using it — discoverable failure beats silent failure.
+- **Node id ↔ data mapping is the caller's responsibility.** `tree_to_graph_elements` auto-generates ids `"n1", "n2", ...` because Node ids must be unique strings and the original tree dicts may have non-unique sector names. To resolve a clicked id back to the original tree node, the caller (Plan 3.6 Task 3) extends `tree_to_graph_elements` to also return an `id_map: dict[str, dict]`. The `"root"` id is intentionally excluded from `id_map` so root-clicks don't trigger sector-mode (the root is just the event title).
+- **`Node`'s `title` parameter is the hover-tooltip text** in streamlit-agraph (NOT the node label). The visible text on the node is `label`; `title` only shows on hover. Plan 3.5 Task 7 ripple polish moved the price-change pct from `label` to `title` for visual cleanup.
+- **`Edge(source=..., target=...)` accepts `target` as a kwarg but stores it as `to` internally.** Tests should not assert on `edge.target`; use `edge.to` if you need to introspect (or just count edges by `len(edges)` which is what our tests do).
+
+### `plotly==5.24.1` (Session 9 lessons)
+
+- **`mode="markers+text"` does NOT auto-arrange labels.** Plotly is plotting-grade, not Tufte-grade — there is no built-in collision avoidance for text labels. With ≥5 labels in a horizontal axis, `textposition="top center"` produces a stacked unreadable blob. Plan 3.6 Task 2 replaces this pattern with explicit annotations (`fig.add_annotation(...)`) at alternating top/bottom y-shift values plus per-marker vertical stems (`fig.add_shape(type="line", ...)`). **Convention:** for any timeline-like horizontal axis with >5 markers, use annotations + stems, not `mode="markers+text"`.
+- **`fig.add_vline(x=...)` accepts ISO date strings, but `fig.add_shape(type="line", x0=..., x1=...)` needs `pd.Timestamp(...)`.** Mixing the two APIs across the same figure is fine but watch the type contract per call.
+- **Plotly hover templates use `<br>` for line breaks (HTML), not `\n`.** `hoverinfo="text"` + `hovertext=[...]` accepts HTML in each text item.
+
+### `streamlit-plotly-events==0.0.6` (Plan 3.6, Session 9)
+
+- **Re-added in Plan 3.6 Task 1 after Plan 3.5 wrongly dropped it.** Reverses Plan 3.5's spec deviation #1. The package is a legacy Streamlit-component wrapper (last updated 2022) but pip-resolves cleanly with `streamlit==1.39.0` — confirmed by Plan 3.6 recon dry-run.
+- **`plotly_events(fig, click_event=True, select_event=False, hover_event=False)` returns a list of `{x, y, curveNumber, pointIndex, pointNumber}` dicts on click.** No `customdata` propagation — to recover the date from a marker click, look up `moves[pointIndex]["date"]` in the original moves list. Helper: `_click_event_to_iso(events, moves)` in `ui/price_chart.py` (Plan 3.6 Task 1).
+- **Curve number convention in Plan 3.6 Task 1 figure:** `curveNumber=0` is the line trace, `curveNumber=1` is the markers trace. The constant `_MARKERS_CURVE_INDEX = 1` in `ui/price_chart.py` documents this. If you ever add a third trace BEFORE the markers, update the index.
+
 ### `python-dotenv==1.0.1` — Claude-Desktop-shadows-env-var quirk (Session 6)
 
 - **Claude Desktop exports `ANTHROPIC_API_KEY=` (empty string) into child processes.** `load_dotenv()` without `override=True` treats an empty string as "already set" and does NOT replace it from `.env`. Symptom: `os.environ.get("ANTHROPIC_API_KEY")` returns `""` (falsy) even though `.env` has a real key populated. Session 6 discovered this on Task 1 Step 4. Fix is module-specific:
@@ -536,10 +608,10 @@ Green tests from a subagent are *necessary but not sufficient*. Before accepting
 ## How to Resume
 
 1. `cd /Users/fangyihe/appliedfinance`
-2. Read this file (`CLAUDE.md`) and [`docs/progress.md`](docs/progress.md) for what happened last session. **As of end-of-Session-8, the active plan is Plan 3.** Session 6 landed 20 commits completing Plan 2; Session 7 added one pre-Plan-3 hardening commit (`d98e492`) closing three Important + two Minor issues from a comprehensive post-Plan-2 code review; Session 8 was a zero-code strategy conversation that **explicitly rejected Plan 2.5** (full-text article scraping) on course-constraint grounds and produced the canonical Limitations paragraph for the report / presentation. See progress.md Session 8 + Session 7 entries, and — critically — re-read the new **"Course Grading Context & Plan 2.5 Rejection"** subsection under Scope Lock before proposing any data-layer expansion or any output-quality work that would cost >30 minutes of user time.
-3. Read the active plan file: [`docs/superpowers/plans/2026-04-16-plan-3-ui-eval.md`](docs/superpowers/plans/2026-04-16-plan-3-ui-eval.md). 12 tasks; M5 Streamlit 4-tab UI + §9 evaluation harness.
+2. Read this file (`CLAUDE.md`) and [`docs/progress.md`](docs/progress.md) for what happened last session. **As of end-of-Session-9, the active plan is Plan 3.6 (UI interaction fixes), WRITTEN but NOT EXECUTED.** Plan 3 Tasks 1–3 (shell + timeline + ripple) and Plan 3.5 (single-page event-focused UI redesign) are DONE on `main`. Plan 3.5 shipped a UI with three live UX failures the user identified (click handler dead, timeline labels stacked, ripple clicks discarded); Plan 3.6 fixes those in 3 tasks. See `docs/progress.md` Session 9 entry for the long form. Re-read the **"Course Grading Context & Plan 2.5 Rejection"** subsection under Scope Lock before proposing any data-layer expansion or any output-quality work that would cost >30 minutes of user time — that constraint is still in force.
+3. Read the active plan file: [`docs/superpowers/plans/2026-04-26-plan-3.6-ui-interaction-fixes.md`](docs/superpowers/plans/2026-04-26-plan-3.6-ui-interaction-fixes.md). 3 tasks: real click handler via `streamlit-plotly-events`, staggered timeline, ripple-click → axis sector mode. End-state: 89 passed + 4 skipped. **User wants to review the plan before execution** — confirm review status before dispatching a subagent.
 4. Sanity-check the environment:
-   - `/opt/anaconda3/envs/macro-ripple/bin/pytest -v` → **60 passed, 4 skipped** (end of Session 7). The 4 skipped are `RUN_LIVE=1`-gated: 2 in `tests/test_smoke_live.py` (Plan 1) and 2 in `tests/test_live_agents.py` (Plan 2).
+   - `/opt/anaconda3/envs/macro-ripple/bin/pytest -v` → **85 passed, 4 skipped** (end of Session 9). The 4 skipped are `RUN_LIVE=1`-gated: 2 in `tests/test_smoke_live.py` (Plan 1) and 2 in `tests/test_live_agents.py` (Plan 2).
    - `/opt/anaconda3/envs/macro-ripple/bin/python -c "import config, os; print(bool(os.environ.get('NEWSAPI_KEY')), bool(os.environ.get('ANTHROPIC_API_KEY')))"` — note that under Claude Desktop, this may print `True False` because the parent shell exports `ANTHROPIC_API_KEY=` (empty) which shadows `.env`. That's only a problem for live runs, not unit tests. To verify the real key is present: `awk -F= '/ANTHROPIC_API_KEY/ {print substr($2,1,15)}' .env` should show `sk-ant-api03-...`. See Library Quirks → `python-dotenv` if you hit this.
    - `git status --short` → clean. If `.env` appears here as untracked, verify it's still ignored by `.gitignore` (line 7) — do NOT stage it.
    - Optional — verify the Plan-1 data is fresh enough for Plan 2/3 to consume: `ls -la data/manifest.json`. If stale or missing, run `/opt/anaconda3/envs/macro-ripple/bin/python setup.py --event iran_war --refresh` (takes ~30–60s, hits live GDELT + NewsAPI + yfinance).
@@ -547,7 +619,16 @@ Green tests from a subagent are *necessary but not sufficient*. Before accepting
 5. Start the next task per the mode mapping in "Working Mode". If dispatching a subagent, paste the plan task text inline in the brief — do not hand it the plan file. Include "Library Quirks" entries relevant to the task in the subagent's brief.
 6. Before declaring the task done, walk the six Acceptance Criteria plus the Subagent Review Checklist (if applicable).
 
-### Pre-Plan-3 specific notes
+### Pre-Plan-3.6 specific notes (Session 9 → Session 10 handoff)
+
+- **Live verification needed before execution:** the user reported the Plan 3.5 UI's broken click behavior empirically; before Plan 3.6 Task 1 lands, a future session should reproduce by: (a) `streamlit run ui_app.py`, (b) clicking a marker on the price chart, (c) confirming the right-side detail panel does NOT update. This confirms Plan 3.5's `st.plotly_chart(on_select="rerun")` choice was wrong and Plan 3.6 Task 1 is justified. If somehow it DOES fire on plain click in the user's environment, recheck Streamlit version (`pip show streamlit`) and modebar default tool — but expect it to fail per the documented `on_select` semantics.
+- **Plan 3.6 Task 1 reverses Plan 3.5 Spec Deviation #1.** Plan 3.5's self-review notes claim "Streamlit native is better" — that conclusion was based on signature inspection, not real-fire testing. Plan 3.6 re-adds `streamlit-plotly-events==0.0.6` and uses `plotly_events(click_event=True)`. Do NOT re-litigate this in a future plan — the empirical evidence is recorded.
+- **Plan 3.6 Task 2 changes the data path through `_build_figure` significantly** (`mode="markers+text"` → annotations + shapes). The `_label_y_for_index(i)` helper is the only TDD'd piece; the rest is a visual rewrite verified by smoke. Expect ~80% of the ProcessOn reference image's polish, not 100%. At 22 markers the density is still tight; user can drag the price-chart slider to thin them.
+- **Plan 3.6 Task 3 changes `tree_to_graph_elements` return shape from 2-tuple to 3-tuple.** Three pre-existing tests in `test_ui_helpers.py` will FAIL with `ValueError: too many values to unpack` until updated to `nodes, edges, _id_map = ripple.tree_to_graph_elements(tree)`. Plan 3.6 Step 7 enumerates the three test functions to fix; do not skip that step.
+- **Known gap NOT addressed by Plan 3.6:** `event_axis.render` calls `significant_moves(prices)` with the module-default `_DEFAULT_THRESHOLD_PCT=3.0`, NOT the user-tuned slider value from `price_chart.render()`. Slider plumbing through `st.session_state` was scoped out to keep Plan 3.6 focused on the three observed UX failures. If user wants this, it's a 5-line Plan 3.7 task.
+- **Known gap NOT addressed:** `event_axis._headline_for` picks headlines by causal-keyword match, bypassing the LLM, so non-English headlines can still surface as Viz-2 labels even though Plan 3 Task-2 fix made `run_news_agent` produce English. For demo, may want to either (a) pass picked headlines through the LLM for translation, or (b) language-filter at the GDELT-fetch stage. Track as Plan 3.7 demo-polish.
+
+### Pre-Plan-3 specific notes (carry-forward; partly satisfied)
 
 - **API contracts Plan 3 must respect** (Session 6 Plan 2 surfaces Plan 3 will consume):
   - `agent_supervisor.run(cfg, query, as_of) -> AgentState` — returns a partial dict whose populated keys DEPEND on the classified intent. Plan 3 UI must branch on `final["intent"]` ("timeline" → `timeline`+`news_results` keys; "market" → `market_data`; "ripple" → `ripple_tree`; "qa" → `response`+`news_results`). Do not assume all keys are present.

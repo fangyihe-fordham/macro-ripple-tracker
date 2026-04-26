@@ -1,5 +1,173 @@
 # Progress Log
 
+## Session 9 — 2026-04-24 → 2026-04-26 — Plan 3 Tasks 1–3 inline + Plan 3.5 written + executed via subagent + Plan 3.6 written
+
+**Model:** Claude Opus 4.7 (1M context) via Claude Code CLI.
+**Scope:** Long mixed session that started Plan 3 inline (Tasks 1–3), debugged a Plan-3-Task-2 timeline-empty bug live with the user, then on user request drafted **Plan 3.5** (a UI redesign superseding Plan 3 Tasks 4–5 with an event-focused single-page dashboard), executed Plan 3.5 via subagent-driven mode (16 follow-on commits including code-review-driven cleanups), and after the user found three concrete UX failures in the live UI, drafted **Plan 3.6** (UI interaction fixes: real click handler, staggered timeline, ripple-click → axis sector mode). Plan 3.6 has NOT been executed yet — pending user review of the plan file. Plan 3 Tasks 6–12 (eval harness) untouched.
+
+**Commit count on `main`:** 20 since end of Session 8 (`ab18138`). Final test state: **85 passed, 4 skipped** (was 60+4 at end of Session 7/8 → +25 net new tests this session).
+
+### Commits landed (branch `main`, oldest → newest)
+
+| # | Commit | Mode | Plan / phase | One-liner |
+|---|---|---|---|---|
+| 1 | `1c0e0fa` | inline | Plan 3 Task 1 | Streamlit shell + sidebar event selector + 4 tab stubs |
+| 2 | `f5178a6` | inline | Plan 3 Task 2 | Tab 1 Timeline with severity color bars |
+| 3 | `a835bf0` | inline | Plan 3 Task 2 follow-up | **Timeline bug fix** — English output + 4096 tokens + Clear-cache button |
+| 4 | `c750b01` | inline | Plan 3 Task 3 | Tab 2 interactive ripple tree (streamlit-agraph) with node details |
+| 5 | `7b8f6a1` | subagent | Plan 3.5 Task 1 | Harden ripple agent — English-only + graceful JSON fallback |
+| 6 | `2c94a5e` | subagent | Plan 3.5 Task 1 follow-up | `isinstance` shape gate in `generate_structure` |
+| 7 | `4935e01` | subagent | Plan 3.5 Task 2 | `agent_price_explainer` — leaf agent for per-day attribution |
+| 8 | `bc78f03` | subagent | Plan 3.5 Task 2 follow-up | Tighten price-explainer fallback tests |
+| 9 | `e4bd3be` | subagent | Plan 3.5 Task 3 | `ui/price_chart` — Brent line + significant-move markers |
+| 10 | `2d56cc5` | subagent | Plan 3.5 Task 3 follow-up | pct-mode markers — divide-by-zero + Literal y_mode + baseline warning |
+| 11 | `a73ab81` | subagent | Plan 3.5 Task 4 | `ui/price_detail_panel` — structured "why did it move" |
+| 12 | `46a357c` | subagent | Plan 3.5 Task 4 follow-up | price_detail_panel readability nits |
+| 13 | `1713b6b` | subagent | Plan 3.5 Task 5 | `ui/event_axis` — horizontal time axis coupled to price markers |
+| 14 | `5a368fc` | subagent | Plan 3.5 Task 5 follow-up | event_axis imports color constants from price_chart |
+| 15 | `5905649` | subagent | Plan 3.5 Task 6 | `ui/sidebar_chat` — persistent chat using agent_supervisor |
+| 16 | `f4f6f20` | subagent | Plan 3.5 Task 6 follow-up | sidebar_chat — guard against `None pct_change` in market branch |
+| 17 | `154f490` | subagent | Plan 3.5 Task 7 | Ripple visual polish — truncated labels, pct in tooltip, size by severity |
+| 18 | `a4db058` | subagent | Plan 3.5 Task 8 | Single-page event-focused dashboard shell |
+| 19 | `f4483c2` | subagent | Plan 3.5 Task 9 | README updated for Plan 3.5 single-page dashboard |
+| 20 | `4b102aa` | subagent | Plan 3.5 final review | Post-Plan-3.5 cleanups from final review |
+
+Plan files written this session (uncommitted at session end; will commit with this wrap-up):
+- `docs/superpowers/plans/2026-04-24-plan-3.5-ui-redesign.md`
+- `docs/superpowers/plans/2026-04-26-plan-3.6-ui-interaction-fixes.md`
+
+### (1) What was completed
+
+#### Phase 1 — Plan 3 Tasks 1–3 inline (commits 1–4)
+
+**Task 1 — Streamlit shell + 4 tab stubs (`1c0e0fa`).** Added `streamlit==1.39.0`, `plotly==5.24.1`, `streamlit-agraph==0.0.45` to requirements. Created `ui_app.py` with sidebar event picker + as-of date input + 4 tab containers, plus `ui/__init__.py` empty + 4 stub files (`ui/timeline.py`, `ui/ripple.py`, `ui/market.py`, `ui/qa.py`) each rendering `st.info("Not implemented yet.")`. Verified server boots on `localhost:8501` HTTP 200.
+
+**Task 2 — Tab 1 Timeline (`f5178a6`).** TDD'd `classify_severity()` keyword heuristic + `fetch_timeline()` cached supervisor wrapper + `render()` left-border-colored cards. Hit a Streamlit-cache-vs-pydantic incompatibility on first try — `@st.cache_data` cannot hash pydantic v2 `EventConfig` (non-frozen models have `__hash__=None`); fixed by prefixing the cached arg with `_cfg` per Streamlit's leading-underscore convention.
+
+**Task 2 follow-up — Timeline empty-result bug fix (`a835bf0`).** User reported the Timeline tab showed "No timeline items generated" even after `setup.py` completed. Diagnostic sequence:
+1. CLI smoke `agent_supervisor.run(cfg, "...timeline...", as_of)` returned 15 items → ruled out backend.
+2. Direct call to wrapped `fetch_timeline(cfg, cfg.end_date)` from CLI → 0 items.
+3. Direct call to `__wrapped__` (cache-bypassed) → 15 items.
+4. Conclusion: Streamlit's `@st.cache_data` was caching an earlier empty `[]` for the TTL=3600s window.
+5. Ran the supervisor 5× → 2 of 5 returned empty timeline, 3 returned 15. Confirmed LLM flake.
+6. Captured raw LLM output on a flake → `JSONDecodeError: Unterminated string starting at: line 17 column 132 (char 3423)`.
+7. Output was emitting **Arabic** (GDELT corpus heavy with Middle-East media). Arabic tokenizes ~3× denser than English; 2048 `max_tokens` → mid-string truncation → unparseable JSON → Session-7 shape-gate fallback to empty list → cache lock-in.
+
+Three small fixes in one commit:
+- `agent_supervisor.run_news_agent`: `max_tokens` 2048 → 4096
+- `prompts/timeline_system.txt`: explicit "write all headlines and impact_summary in ENGLISH" rule
+- `ui_app.py` sidebar: **"Clear cache & refresh" button** (`st.cache_data.clear() + st.rerun()`) — demo recovery escape valve
+
+**Task 3 — Tab 2 ripple tree (`c750b01`).** `tree_to_graph_elements(tree) → (nodes, edges)` recursive walk emitting streamlit-agraph `Node` and `Edge` objects; severity color encoding; `_label()` shows sector + price-change pct; `_render_node_detail()` + collapsible expander listing each sector's mechanism, severity, Δ%, and up to 3 supporting-news links. Verified `streamlit_agraph.Node` exposes `.id, .label, .color, .size` attributes (the `.target` of `Edge` is internally stored as `.to`, but Plan 3 test doesn't introspect Edge attrs). Plan deviation: plan asserted `"Oil" in labels` (exact match), which would fail because `_label` returns `"Oil  (+49.6%)"`; rewrote test to substring-match via `" ".join(labels)` and noted in the report. CLI ripple generation × 3 trials returned 5–6 top-level sectors and 27–32 total nodes consistently; no Task-2-style flake.
+
+#### Phase 2 — Plan 3.5 written (UI redesign, supersedes Plan 3 Tasks 4–5)
+
+User pasted a self-contained spec + `/superpowers:write-plan` invocation. Spec rejected the 4-tab dashboard and asked for a single-page event-focused dashboard:
+- Sidebar (event picker + as-of + metadata + persistent chat)
+- Main: `[ price_chart (70%) | detail_panel (30%) ]` then `[ event_axis (full) ]` then `[ ripple_tree (full) ]`
+- New leaf agent `agent_price_explainer` answering "why did this day move?"
+- Carryover risk: apply timeline-bug fix pattern to ripple agent
+
+Plan file `docs/superpowers/plans/2026-04-24-plan-3.5-ui-redesign.md` written with 9 tasks, complete TDD code blocks per task, end-state target **82 passed**. Three intentional spec deviations called out:
+1. **Dropped `streamlit-plotly-events` dep** in favor of Streamlit-native `st.plotly_chart(on_select="rerun", selection_mode="points")`. Reasoning at plan-writing time: pinned 1.39.0's `inspect.signature(st.plotly_chart)` showed `on_select` and `selection_mode` params present → assumed click capture would work. **THIS DECISION TURNED OUT TO BE WRONG — see Phase 4 below.**
+2. `agent_price_explainer.py` at repo root, not `agents/` — matches existing flat-layout convention.
+3. Threshold made user-adjustable via slider (default 3%). Recon showed 22/34 Brent days exceed 3%, dense but honest.
+
+#### Phase 3 — Plan 3.5 executed via subagent-driven (commits 5–20)
+
+User chose subagent-driven mode. 9 plan tasks → 16 commits (each task got 1 main + occasional follow-up cleanups from inter-task code review). Net result:
+- New leaf agent: `agent_price_explainer.py` + `prompts/price_explainer_system.txt` (5 unit tests)
+- Hardened ripple agent: English-only prompt + graceful JSON fallback in `run_ripple_agent` + isinstance shape gate in `generate_structure`
+- 4 new UI modules: `ui/price_chart.py`, `ui/price_detail_panel.py`, `ui/event_axis.py`, `ui/sidebar_chat.py`
+- `ui_app.py` rewritten as single-page two-column shell
+- `ui/timeline.py`, `ui/market.py`, `ui/qa.py` deleted
+- `ui/ripple.py` visual polish (label truncation, pct moved to tooltip, size scales with severity)
+- `README.md` updated with new "Dashboard layout" section
+- Final cleanups commit `4b102aa` from a comprehensive code-review pass
+
+End of Phase 3: **85 passed, 4 skipped** (different from plan's 82 expected because subagent added 3 small fix-tests beyond the spec; net delta is fine).
+
+#### Phase 4 — UI debug session (no commits, all observation)
+
+User did a live demo run and surfaced **three concrete UX failures**:
+
+**Failure A — Click handler dead.** Clicking red/green markers on the Brent chart showed hover tooltips but the right-side detail panel stayed stuck on "Click a marker on the chart to explain that day's move." Root cause: `st.plotly_chart(on_select="rerun", selection_mode="points")` only fires when the user has activated the box-select or lasso-select tool from the Plotly modebar. The default Pan tool does NOT trigger selection events. So my Plan 3.5 Phase-2 spec deviation #1 (dropping `streamlit-plotly-events` for "the native API") was empirically wrong: the API exists, the params accept the values I passed, but the gesture doesn't fire. **Lesson: API-presence check via `inspect.signature` is necessary but not sufficient — verify the actual gesture fires in a `streamlit run`-ed app before committing the choice into a plan.**
+
+**Failure B — Event-axis label stacking.** All 22 timeline markers placed at `y=1` with `mode="markers+text"` and `textposition="top center"` resulted in headlines stacked on top of each other, totally unreadable. Plotly does no auto-collision-avoidance for text labels. User showed a ProcessOn reference image of a chronology diagram with alternating top/bottom labels + vertical stems and asked for that. **Lesson: Plotly text-mode is plotting-grade, not Tufte-grade. For >5 labels in a horizontal axis, use annotations + alternating yshift + per-marker shapes (vertical stems), not `mode="markers+text"`.**
+
+**Failure C — Ripple click doesn't propagate.** User clicked a sector node in the ripple tree expecting that sector's news to populate the timeline above. Nothing happened. Two combined gaps: (1) Plan 3.5 Task 8 wrote `agraph(nodes=nodes, edges=edges, config=cfg_graph)` without capturing the return value — but `streamlit_agraph.agraph()` returns the clicked node id (verified by reading the source: `__init__.py:38-39`); (2) the per-node `supporting_news` (3 headlines per node from `agent_ripple.attach_news`) was dumped into a flat "Node details" expander rather than being addressable per-sector. **Lesson: when wiring an interactive component, always capture its return value and document the expected return contract in a comment, even when you're not yet using it.**
+
+#### Phase 5 — Plan 3.6 written (UI interaction fixes)
+
+After the user said "you couldn't deliver, write the plan first so I can review", drafted `docs/superpowers/plans/2026-04-26-plan-3.6-ui-interaction-fixes.md` with 3 tasks:
+
+**Task 1 — Real click handler.** Re-add `streamlit-plotly-events==0.0.6` (reverses Plan 3.5 deviation #1). Replace `st.plotly_chart(on_select=...)` block in `ui/price_chart.render` with `plotly_events(fig, click_event=True, ...)`. New pure helper `_click_event_to_iso(events, moves) -> Optional[str]` maps the click event's `pointIndex` back to a date from the moves list, with defensive guards for line-clicks (curveNumber=0) and out-of-range indexes. 1 new unit test.
+
+**Task 2 — Staggered timeline labels.** Rewrite `_build_figure` in `ui/event_axis.py` using Plotly annotations with alternating top/bottom yshift + per-marker vertical stems + bordered label boxes. New pure helper `_label_y_for_index(i) -> (y, yanchor)`. Truncate labels to 28 chars. Honesty: 80% of ProcessOn polish, not 100% — at 22 markers density may still be tight; user can use the price-chart threshold slider to thin them.
+
+**Task 3 — Ripple click → event-axis sector mode.** Modify `tree_to_graph_elements` to return `(nodes, edges, id_map)` where `id_map: dict[node_id_str, original_node_dict]`. `ripple.render` captures `clicked_id = agraph(...)`, looks up the data, writes `st.session_state["selected_sector"] = {sector, mechanism, severity, supporting_news}`, calls `st.rerun()`. `event_axis.render` branches: in sector mode, build markers from `supporting_news` instead of price-derived `significant_moves`; otherwise existing price-driven behavior. New "← Back to price view" button. `ui_app.main()` clears `selected_sector` on event switch and "Clear cache". Updates 3 pre-existing tests in `test_ui_helpers.py` to unpack the new 3-tuple. End-state: **89 passed**.
+
+Plan 3.6 self-review notes the honesty paragraphs above, calls out Plan 3.5 Task 5 known gap (Viz 2 uses `_DEFAULT_THRESHOLD_PCT` instead of the slider value) as still-deferred, and records the session-state contract for future readers.
+
+### (2) Deviations from the original plan(s) and why
+
+#### Deviation A — Plan 3 Tasks 4–5 SUPERSEDED (not executed)
+
+The original Plan 3 (`2026-04-16-plan-3-ui-eval.md`) had Tasks 4 (Market dashboard with Plotly per-ticker charts) and 5 (Ask Anything chat tab). After Plan 3 Task 3 landed, the user pivoted to a single-page event-focused redesign. Plan 3.5 supersedes those two tasks. Plan 3 Tasks 6–12 (the §9 evaluation harness) are unaffected and remain unstarted.
+
+#### Deviation B — Plan 3 Task 2 plan-text vs library-real-surface (a Plan-↔-library drift instance)
+
+Plan 3 Task 2's test asserted:
+```python
+assert timeline.classify_severity("Oil transit halted.") in {"critical", "significant", "moderate"}
+```
+
+…and the planned `_label` function returned `"Oil  (+49.6%)"`, but Plan 3 Task 3's test asserted `assert "Oil" in labels` (exact-match list containment), which would never match. Following CLAUDE.md Subagent-Review-Checklist smell #7 ("Plan-file assertions that lock in bugs"), I rewrote the Task 3 test to use substring-match via `" ".join(labels)` — preserves the `_label` price-change feature while satisfying the spec's intent. Recorded inline in the assistant message before implementation.
+
+#### Deviation C — Plan 3.5 spec deviation #1 was empirically wrong
+
+At Plan 3.5 writing time I dropped `streamlit-plotly-events` because `st.plotly_chart` accepts `on_select` and `selection_mode`. Empirically these don't fire on a plain marker click — they require activating the box/lasso-select modebar tool. Plan 3.6 Task 1 reverses this. **Future plans must do a real-click smoke test, not just a signature inspection, before committing to a UI-event API.**
+
+#### Deviation D — Plan 3.5 task count vs commits
+
+Plan 3.5 had 9 tasks; the subagent-driven execution produced 16 commits. Excess came from inter-task code-review-driven follow-up commits (each "feat: Task N" commit was followed 0–1 "refactor: Task N follow-up" commits per the CLAUDE.md "Corrective workflow when a smell is found" pattern). Net behavior matches the plan; commit count is honest about the iteration cycles.
+
+#### Deviation E — Plan 3.5 expected "82 passed" vs actual "85 passed"
+
+Plan 3.5 self-review forecast 82 passed; actual is 85. Three extra tests came from subagent-led tightening: (1) tighter `agent_price_explainer` fallback tests in `bc78f03`, (2) implicit `isinstance` shape-gate test in `2c94a5e`, (3) explicit price_chart pct-mode regression test added in `2d56cc5`. All adds were code-review-driven additions, not regressions — net signal is positive.
+
+#### Deviation F — Plan 3.6 written but not executed
+
+User asked for the plan first to review. Plan 3.6 lives in `docs/superpowers/plans/2026-04-26-plan-3.6-ui-interaction-fixes.md`. **Execution is gated on user review.**
+
+### (3) What is blocked and on what
+
+1. **Plan 3.6 execution is blocked on user review of the plan file.** Once user approves, two execution modes: subagent-driven (recommended; matches Plan 3.5) or inline (matches Plan 3 Tasks 1–3). Estimated total effort: ~5 hours at user's measured pace; Task 3 (ripple click → axis sector mode) is the longest single task.
+
+2. **Plan 3 Tasks 6–12 (eval harness §9) blocked on Plan 3.5/3.6 stabilizing.** No technical reason the eval harness couldn't proceed in parallel — all four eval dimensions consume only the existing `agent_supervisor.run`, `agent_ripple.generate_ripple_tree`, `data_news.retrieve`, `data_market.get_price_on_date` surfaces, all of which are stable. But the user has explicitly sequenced "fix the UI first, then evaluate." User decides when to start.
+
+3. **The Plan 3.5 Task 5 known gap** (event_axis uses `_DEFAULT_THRESHOLD_PCT` constant instead of the price-chart slider value) is intentionally NOT fixed by Plan 3.6. Threshold-slider plumbing through `st.session_state` was scoped out of Plan 3.6 to keep the patch focused on the three observed UX failures. Workaround for demo: drag the slider to whatever value gives a clean chart, then mentally read the event axis at the same threshold (it shows ~22 markers regardless). Or: capture the slider value into `st.session_state["chart_threshold"]` and have `event_axis.significant_moves(...)` consume it — a 5-line Plan 3.7 task if user wants it later.
+
+4. **Demo-day language mixing** (Plan 3 Task 2 follow-up surfaced this): GDELT indexes Middle-East media so retrieval often returns Arabic content. Timeline-system prompt now translates to English, but the `event_axis._headline_for` path bypasses the LLM entirely (it picks the headline by causal-keyword match) — meaning Arabic headlines can still surface in Viz 2 labels. Cosmetic, not blocking; for demo, may want to also pass these through the LLM for translation, OR filter `language` field at the GDELT-fetch stage. **Track as a Plan-3.7 demo-polish item if needed.**
+
+5. **Live `run.py` Anthropic-API smoke** still unverified end-to-end since end of Session 7. Not a blocker.
+
+### Next session — exact next step
+
+**1. Read Plan 3.6** (`docs/superpowers/plans/2026-04-26-plan-3.6-ui-interaction-fixes.md`). User indicated they want to review it before executing.
+
+**2. Pre-execution sanity:**
+- `cd /Users/fangyihe/appliedfinance`
+- `git status --short` → should show only the two uncommitted plan files (3.5 + 3.6) before this wrap-up commits them
+- `/opt/anaconda3/envs/macro-ripple/bin/pytest -q` → expect **85 passed, 4 skipped**
+- `streamlit run ui_app.py` and verify the Plan 3.5 single-page UI loads (chart + axis + ripple all render). Confirm by clicking a marker that the detail panel does NOT update — that's the bug Plan 3.6 Task 1 fixes.
+
+**3. If user approves Plan 3.6, execute it.** Subagent-driven mode is the smoothest match; inline-mode also fine for 3 tasks. End-state target: **89 passed, 4 skipped**.
+
+**4. After Plan 3.6 lands, decide on Plan 3 Tasks 6–12 (eval harness)** vs. demo-polish work (Viz-2 threshold slider plumbing, headline translation). User has said "fix UI first, then evaluate"; once Plan 3.6 is green, evaluation is the natural next phase.
+
+---
+
 ## Session 8 — 2026-04-24 (afternoon) — Strategy conversation: Plan 2.5 proposed and rejected
 
 **Model:** Claude Opus 4.7 (1M context) via Claude Code CLI.
