@@ -8,7 +8,7 @@ import streamlit as st
 from config import EventConfig
 from data_market import get_price_range
 from data_news import retrieve
-from ui.price_chart import significant_moves, _PRIMARY_SYMBOL
+from ui.price_chart import significant_moves, _PRIMARY_SYMBOL, _UP_COLOR, _DOWN_COLOR
 
 
 # Event-defining language gets a keyword bonus over pure cosine score.
@@ -51,7 +51,7 @@ def _build_figure(dates_with_headlines: List[Dict], window_start: date, window_e
     ys = [1] * len(xs)  # constant y — axis is horizontal
     labels = [d["label"] for d in dates_with_headlines]
     hovers = [d["hover"] for d in dates_with_headlines]
-    colors = ["#d32f2f" if d["direction"] == "up" else "#2e7d32"
+    colors = [_UP_COLOR if d["direction"] == "up" else _DOWN_COLOR
               for d in dates_with_headlines]
 
     fig = go.Figure()
@@ -89,6 +89,11 @@ def render(cfg: EventConfig, as_of: date) -> None:
     if prices.empty:
         st.warning(f"No price data for {_PRIMARY_SYMBOL}.")
         return
+    # KNOWN GAP (deferred to Task 8 integration): we use the module-default
+    # threshold here, NOT the user-tuned slider value from price_chart.render().
+    # If the user drags the Viz-1 slider to e.g. 7%, Viz-1 shows fewer markers
+    # while Viz-2 still uses 3%. Fixing requires plumbing the slider value
+    # through st.session_state, which the Task-8 shell rewrite can decide.
     moves = significant_moves(prices)
     if not moves:
         st.info("No significant-move days to annotate.")
