@@ -157,3 +157,46 @@ def test_pick_headline_for_date_returns_none_when_no_match():
     from ui import event_axis
     hits = [{"headline": "x", "text": "x", "metadata": {"date": "2026-02-15"}, "score": 0.5}]
     assert event_axis.pick_headline_for_date(hits, "2026-03-02") is None
+
+
+def test_format_supervisor_result_qa_has_citations():
+    from ui import sidebar_chat
+    result = {
+        "intent": "qa",
+        "response": {
+            "answer": "Brent rose on Hormuz closure.",
+            "citations": [{"url": "https://x/1", "headline": "Brent hits 88", "date": "2026-03-02"}],
+        },
+    }
+    md = sidebar_chat.format_supervisor_result(result)
+    assert "Brent rose" in md
+    assert "Brent hits 88" in md
+    assert "https://x/1" in md
+
+
+def test_format_supervisor_result_market_shows_deltas():
+    from ui import sidebar_chat
+    result = {
+        "intent": "market",
+        "market_data": {
+            "BZ=F": {"available": True, "baseline": 72.48, "latest": 99.39, "pct_change": 37.12},
+            "NG=F": {"available": False, "baseline": None, "latest": None, "pct_change": None},
+        },
+    }
+    md = sidebar_chat.format_supervisor_result(result)
+    assert "BZ=F" in md
+    assert "37.1" in md
+    assert "N/A" in md or "unavailable" in md.lower() or "NG=F" not in md
+
+
+def test_format_supervisor_result_timeline_bulleted():
+    from ui import sidebar_chat
+    result = {
+        "intent": "timeline",
+        "timeline": [
+            {"date": "2026-03-01", "headline": "Iran closes Hormuz", "impact_summary": "Oil up."},
+        ],
+    }
+    md = sidebar_chat.format_supervisor_result(result)
+    assert "2026-03-01" in md
+    assert "Iran closes Hormuz" in md
