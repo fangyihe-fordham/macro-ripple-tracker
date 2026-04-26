@@ -28,7 +28,12 @@ def format_supervisor_result(result: Dict) -> str:
             return "No ticker data available for this event."
         lines = ["Market snapshot (% vs baseline):"]
         for sym, v in available:
-            lines.append(f"- **{sym}**: {v['pct_change']:+.2f}%")
+            # pct_change is Optional[float] in the get_price_changes contract.
+            # available=True should imply pct_change is numeric, but format()
+            # would TypeError on None — guard explicitly.
+            pct = v.get("pct_change")
+            pct_str = f"{pct:+.2f}%" if isinstance(pct, (int, float)) else "N/A"
+            lines.append(f"- **{sym}**: {pct_str}")
         unavail = [k for k, v in changes.items() if not v.get("available")]
         if unavail:
             lines += ["", f"_N/A: {', '.join(unavail)}_"]
