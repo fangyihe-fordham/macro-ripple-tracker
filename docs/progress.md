@@ -1,5 +1,184 @@
 # Progress Log
 
+## Session 10 — 2026-04-26 (late) → 2026-04-27 — Plan 3.6 Tasks 1–2 executed under review gates + Task 2 rework + price-attribution diagnostics
+
+**Model:** Codex (GPT-5) via Codex Desktop.
+**Scope:** Executed Plan 3.6 Task 1 and Task 2 on `main`, following the user-requested hard checkpoint after every task (`pytest -v` tail + `git diff HEAD~1 --stat` + manual UI review, then STOP until the user says `continue`). Task 2's first implementation passed tests but failed the user's live UI review: labels still collided visually, Arabic titles were unreadable, generic market-news filler reduced relevance, and repeated `(no coverage)` boxes made the axis harder to scan. Stayed on Task 2, reworked the event axis in a second commit, then answered a user diagnostic question about why some days cannot be explained and landed an out-of-plan but directly user-requested fix in the price-detail path. **Plan 3.6 Task 3 (ripple click → event-axis sector mode) was NOT started.** Final test state: **92 passed, 4 skipped**.
+
+**Commit count on `main`:** 4 code commits since end of Session 9 (`b2734bb`). This wrap-up commit is docs-only.
+
+### Commits landed (branch `main`, oldest → newest)
+
+| # | Commit | Mode | Plan / phase | One-liner |
+|---|---|---|---|---|
+| 1 | `52a269a` | inline | Plan 3.6 Task 1 | Real price-chart click handler via `streamlit-plotly-events` |
+| 2 | `bc67b5f` | inline | Plan 3.6 Task 2 (first pass) | Event-axis annotations + stems + pinned x-range + plan addendum |
+| 3 | `dcc5850` | inline | Plan 3.6 Task 2 follow-up | Event-axis readability rework — English labels, multi-lane layout, collision suppression |
+| 4 | `9c9334e` | inline | User-directed follow-up (out of original Plan 3.6 scope) | Price-detail diagnostics — `±2` day window, stronger query, explicit fallback reasons |
+
+### (1) What was completed
+
+#### Phase 1 — Plan 3.6 Task 1 landed cleanly (`52a269a`)
+
+**Task 1 — real click handler on Viz 1.** Reversed Plan 3.5's wrong assumption that `st.plotly_chart(on_select="rerun", selection_mode="points")` was a usable single-click API. Added `streamlit-plotly-events==0.0.6` back to [`requirements.txt`](requirements.txt), replaced the `st.plotly_chart(... on_select=...)` block in [`ui/price_chart.py`](ui/price_chart.py) with `plotly_events(click_event=True)`, and added pure helper `_click_event_to_iso(events, moves)` to map Plotly's event payload back to the clicked ISO date with defensive guards for line-clicks and bad indexes.
+
+**Tests / verification:**
+- Added `tests/test_ui_helpers.py::test_click_event_to_selected_date_uses_marker_pointindex`.
+- Full suite after the commit: **86 passed, 4 skipped**.
+- User-facing checkpoint was honored: after commit + test run + diff-stat, execution stopped for UI review before Task 2.
+
+#### Phase 2 — Plan 3.6 Task 2 first pass (`bc67b5f`)
+
+**Task 2 first pass — event-axis rewrite from `markers+text` to annotation-based layout.** Reworked [`ui/event_axis.py`](ui/event_axis.py) away from Plotly's stacked `mode="markers+text"` labels into explicit annotations + vertical stems + a shape-based baseline, and pinned the full event window with `xaxis.range=[pd.Timestamp(window_start), pd.Timestamp(window_end)]` so the axis could not collapse to only the marker cluster after the baseline scatter trace was removed. This commit also appended the user-requested **Plan 3.6 Addendum** to [`docs/superpowers/plans/2026-04-26-plan-3.6-ui-interaction-fixes.md`](docs/superpowers/plans/2026-04-26-plan-3.6-ui-interaction-fixes.md):
+- runtime corrections,
+- stronger defaults,
+- and the mandatory per-task UI review gates (`stop after each task until user says continue`).
+
+**Tests / verification:**
+- Added `test_event_axis_label_y_alternates_above_below`.
+- Added `test_event_axis_build_figure_pins_full_window_range`.
+- Full suite after the commit: **88 passed, 4 skipped**.
+
+**Checkpoint outcome:** user reviewed the live UI and rejected the visual result. The screenshot-backed feedback was concrete:
+- labels were still too hard to distinguish,
+- some labels were in Arabic and unreadable for the demo audience,
+- repeated `(no coverage)` boxes added clutter,
+- and simple top/bottom staggering still let wide labels collide visually.
+
+This rejection is important: **unit-green was not enough**. The user review gate caught a real demo-blocking failure that the helper tests did not model.
+
+#### Phase 3 — Task 2 follow-up stayed on the same task until the UI looked right (`dcc5850`)
+
+Instead of starting Task 3, stayed on Task 2 and implemented the user-requested readability fixes in a second commit:
+
+- **English-only label surface:** added cached `_headline_to_english()` in [`ui/event_axis.py`](ui/event_axis.py), using `llm.get_chat_model()` + `strip_fences()` to translate non-English headlines into concise English for display.
+- **Event-specific retrieval relevance:** `_headline_for()` no longer queries with the generic internal name; it now uses `cfg.display_name` so the event-axis headline search is anchored to the user-facing event description rather than generic market-news filler.
+- **Multi-lane placement instead of simple top/bottom flipping:** replaced the 2-lane alternation with `_LABEL_LANES` + `_assign_label_lanes(...)`, effectively allowing 5 vertical bands and only placing a label if it can fit without overlapping the already-placed boxes.
+- **No-overlap rule is strict:** if a label cannot be translated or cannot be placed cleanly, the bordered box is suppressed entirely. The date marker and hover text remain; the chart never renders overlapping label boxes "just to show something."
+- **`(no coverage)` boxes removed:** days with no matched headline stay as markers/hover targets but no longer render a useless repeated label box.
+
+**Tests / verification:**
+- Replaced the first-pass placement test with `test_event_axis_label_y_spans_multiple_lanes`.
+- Added `test_event_axis_translate_headline_to_english`.
+- Preserved `test_event_axis_build_figure_pins_full_window_range`.
+- Full suite after the commit: **89 passed, 4 skipped**.
+
+**Plan-file sync:** the Plan 3.6 markdown was updated in the same commit so the written plan no longer promised only a 2-lane visual rewrite; it now records the multi-lane English-label behavior, the review-gate protocol, and the revised end-of-plan target of **91 passed, 4 skipped**.
+
+**State at end of this phase:** Task 2 was re-done, but **Task 3 still did not start**. The user had not yet signed off with `continue` on the revised Task-2 UI.
+
+#### Phase 4 — User asked why some days cannot be explained; root-cause analysis first, then code (`9c9334e`)
+
+After the Task-2 re-review checkpoint, the user asked a product question rather than a Task-3 implementation question: **why do some dates fail to produce a price explanation at all?** I traced the current behavior through the attribution chain and identified three distinct failure modes:
+
+1. **`no_retrieval`** — the event+ticker query retrieves no indexed news at all.
+2. **`no_nearby_news`** — indexed event news exists, but nothing lands within the attribution window.
+3. **`insufficient_evidence`** — nearby items exist, but the evidence is too thin / malformed / weak for a grounded explanation.
+
+The user asked for three concrete follow-ups:
+- change the attribution window from `±3` days to **`±2`** days,
+- strengthen the retrieval query with event context,
+- and show the failure reason directly in the UI instead of hiding it behind a generic fallback.
+
+The resulting commit touched both the leaf agent and the detail panel:
+
+**[`agent_price_explainer.py`](agent_price_explainer.py)**
+- `_DATE_WINDOW_DAYS = 2` (was 3).
+- Added `_build_query(...)` that combines date + ticker + symbol + `cfg.display_name` + `cfg.seed_keywords`.
+- `explain_move(...)` now distinguishes fallback reasons explicitly and always returns:
+  - `status` (`"explained"` or `"fallback"`),
+  - `reason_code`,
+  - `reason_detail`.
+
+**[`ui/price_detail_panel.py`](ui/price_detail_panel.py)**
+- `format_detail_markdown(...)` now renders a dedicated `**Why this day is hard to explain**` section whenever the attribution path returns a fallback with a `reason_detail`.
+- `_cached_explain(...)` cache key widened to include `event_display_name` and `seed_keywords`, so the new query-shape change is actually reflected in cached results.
+
+**Tests / verification:**
+- Added `test_build_query_includes_event_context`.
+- Added `test_raw_hits_but_none_within_two_days_sets_no_nearby_reason`.
+- Added `test_format_detail_markdown_surfaces_failure_reason`.
+- Updated existing `test_agent_price_explainer.py` assertions to check `status` / `reason_code`.
+- Full suite after the commit: **92 passed, 4 skipped**.
+
+This commit is **not** Plan 3.6 Task 3. It is a user-directed follow-up landed before Task 3 because the explanation-gap question was more urgent than continuing the ripple-click wiring.
+
+### (2) Deviations from the original plan(s) and why
+
+#### Deviation A — Plan 3.6 stopped being a straight-through 3-task execution
+
+User explicitly required: after each task's code + tests + commit, stop, show `pytest -v` tail + `git diff HEAD~1 --stat`, let the user review the live UI, and **only continue when the user says `continue`**. This execution policy was appended into the plan file itself under the Addendum. Future sessions must not silently revert to "finish the whole plan in one run."
+
+#### Deviation B — Task 2 did not finish in one commit because the first visual result failed live review
+
+The plan text originally framed Task 2 as a single task and, in its earliest form, mostly as a visual rewrite. In reality:
+- first-pass code/tests were green,
+- user review surfaced a genuine readability failure,
+- and the only honest response was a second Task-2 follow-up commit.
+
+This is not hidden scope creep. It is an explicit user-directed checkpoint failure and rework cycle.
+
+#### Deviation C — Task 2 became more than "alternate top/bottom labels"
+
+The original Plan 3.6 Task-2 idea ("annotations + stems + alternating top/bottom") turned out to be insufficient for a 22-marker / 47-day dense timeline. The landed follow-up therefore broadened Task 2 in four ways:
+- event-display-name retrieval for better relevance,
+- English translation of headlines for demo readability,
+- 5-lane collision-aware placement instead of simple alternation,
+- and suppression of `(no coverage)` / unplaceable labels instead of forcing them onto the chart.
+
+Reason: the user explicitly said overlapping or unreadable tags were unacceptable. That changed the acceptance bar from "better than stacked text" to "no overlapped boxes, English-only surface."
+
+#### Deviation D — Out-of-plan price-explanation work landed before Plan 3.6 Task 3
+
+`9c9334e` is not a hidden piece of Task 3. The user changed focus mid-checkpoint and asked why some days cannot be explained. I answered the diagnosis first, then implemented the requested fixes in the attribution path before resuming the plan. Future sessions should treat this commit as a **separate user-directed follow-up**, not as evidence that Task 3 was partially started.
+
+#### Deviation E — Expected test counts drifted twice
+
+There are now three different "counts" to keep straight:
+
+1. **Original Session-9 Plan 3.6 draft:** end-state target **89 passed, 4 skipped**.
+2. **Plan 3.6 Addendum / Task-2 plan sync after the user corrections:** end-state target **91 passed, 4 skipped**.
+3. **Actual repo state at end of this session:** **92 passed, 4 skipped** because the out-of-plan price-attribution diagnostics fix added three more tests.
+
+Future sessions must not mistake the current green suite (`92+4`) for "Task 3 is done." It is not. The extra count came from the diagnostic follow-up, not from ripple-click wiring.
+
+### (3) What is blocked and on what
+
+1. **Plan 3.6 Task 3 is blocked on user approval to continue past the Task-2 checkpoint.** The user requested a hard stop after each task. They have not yet reviewed the revised Task-2 UI and said `continue`.
+
+2. **The ripple-click → sector-mode integration is still entirely unstarted.** Concretely:
+- [`ui/ripple.py`](ui/ripple.py) still discards `agraph()`'s return value,
+- `tree_to_graph_elements(...)` still returns a 2-tuple, not `(nodes, edges, id_map)`,
+- [`ui_app.py`](ui_app.py) does not manage `selected_sector`,
+- [`ui/event_axis.py`](ui/event_axis.py) does not yet have a sector-mode render branch.
+
+3. **Event-axis Task 2 still needs live user sign-off even after the follow-up commit.** The intended review criteria are:
+- labels are in English,
+- label boxes do not overlap,
+- lanes are visibly separated,
+- repeated `(no coverage)` boxes are gone,
+- and the visible labels are more tied to the Hormuz / Iran event than to generic market-news filler.
+
+4. **Price explanations are still inherently limited by the free-tier corpus.** `9c9334e` made the failure mode honest and more informative; it did not magically make every day explainable. Some days will legitimately fall into `no_retrieval`, `no_nearby_news`, or `insufficient_evidence` because the index is built mostly from headlines/snippets, not full article bodies. This is a product limitation, not an immediate coding blocker.
+
+5. **The event-axis threshold remains decoupled from the Viz-1 slider.** This known gap survives this session. `ui/event_axis.render()` still uses `significant_moves(...)` with the module-default threshold, not the user-tuned slider value. Intentionally deferred; do not mistake it for a regression from Task 2.
+
+6. **`git status --short` is not fully clean even after this wrap-up commit because the local worktree contains untracked `AGENTS.md`.** It was user-provided context during this session and was not requested as a tracked repo change. Future sessions must continue staging explicitly by file and must not accidentally sweep `AGENTS.md` into a commit.
+
+### Next session — exact next step
+
+1. `cd /Users/fangyihe/appliedfinance`
+2. `git status --short` → after this wrap-up commit, expect only `?? AGENTS.md`
+3. `/opt/anaconda3/envs/macro-ripple/bin/pytest -v` → expect **92 passed, 4 skipped**
+4. `streamlit run ui_app.py`
+5. Re-review Task 2 visually on the live page:
+- hard-refresh,
+- inspect the event axis,
+- confirm English labels, no overlapping bordered boxes, multi-lane separation, and no repeated `(no coverage)` tags
+6. **Only if the user explicitly says `continue`,** start Plan 3.6 Task 3 from the updated plan file. Do not begin ripple-click wiring before that approval.
+
+---
+
 ## Session 9 — 2026-04-24 → 2026-04-26 — Plan 3 Tasks 1–3 inline + Plan 3.5 written + executed via subagent + Plan 3.6 written
 
 **Model:** Claude Opus 4.7 (1M context) via Claude Code CLI.
