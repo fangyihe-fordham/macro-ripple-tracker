@@ -184,6 +184,48 @@ def test_pick_headline_for_date_returns_none_when_no_match():
     assert event_axis.pick_headline_for_date(hits, "2026-03-02") is None
 
 
+def test_event_axis_label_y_alternates_above_below():
+    from ui import event_axis
+
+    above = event_axis._label_y_for_index(0)
+    below = event_axis._label_y_for_index(1)
+    above2 = event_axis._label_y_for_index(2)
+
+    assert above[0] > 1.0
+    assert below[0] < 1.0
+    assert above2[0] == above[0]
+    assert above[1] == "bottom"
+    assert below[1] == "top"
+
+
+def test_event_axis_build_figure_pins_full_window_range():
+    from ui import event_axis
+
+    annotated = [
+        {
+            "date": "2026-03-05",
+            "direction": "up",
+            "label": "Oil jumps on closure",
+            "hover": "x",
+        },
+        {
+            "date": "2026-03-12",
+            "direction": "down",
+            "label": "Talks cool prices",
+            "hover": "y",
+        },
+    ]
+
+    fig = event_axis._build_figure(
+        annotated,
+        window_start=date(2026, 2, 27),
+        window_end=date(2026, 4, 15),
+    )
+
+    assert fig.layout.xaxis.range[0] == pd.Timestamp("2026-02-27")
+    assert fig.layout.xaxis.range[1] == pd.Timestamp("2026-04-15")
+
+
 def test_format_supervisor_result_qa_has_citations():
     from ui import sidebar_chat
     result = {

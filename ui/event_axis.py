@@ -46,35 +46,86 @@ def _headline_for(date_iso: str, _cfg_name: str) -> Optional[Dict]:
     return pick_headline_for_date(hits, date_iso)
 
 
-def _build_figure(dates_with_headlines: List[Dict], window_start: date, window_end: date) -> go.Figure:
-    xs = [pd.Timestamp(d["date"]) for d in dates_with_headlines]
-    ys = [1] * len(xs)  # constant y — axis is horizontal
-    labels = [d["label"] for d in dates_with_headlines]
-    hovers = [d["hover"] for d in dates_with_headlines]
-    colors = [_UP_COLOR if d["direction"] == "up" else _DOWN_COLOR
-              for d in dates_with_headlines]
+_LABEL_Y_ABOVE = 1.55
+_LABEL_Y_BELOW = 0.45
 
+
+def _label_y_for_index(i: int) -> tuple[float, str]:
+    """Return (y_position, yanchor) for the i-th marker label."""
+    if i % 2 == 0:
+        return (_LABEL_Y_ABOVE, "bottom")
+    return (_LABEL_Y_BELOW, "top")
+
+
+def _build_figure(dates_with_headlines: List[Dict], window_start: date, window_end: date) -> go.Figure:
     fig = go.Figure()
-    # Full-window baseline axis
+
+    fig.add_shape(
+        type="line",
+        x0=pd.Timestamp(window_start),
+        x1=pd.Timestamp(window_end),
+        y0=1,
+        y1=1,
+        line=dict(color="#bbbbbb", width=2),
+    )
+
+    xs: List[pd.Timestamp] = []
+    ys: List[float] = []
+    colors: List[str] = []
+    hovers: List[str] = []
+
+    for i, item in enumerate(dates_with_headlines):
+        x = pd.Timestamp(item["date"])
+        color = _UP_COLOR if item["direction"] == "up" else _DOWN_COLOR
+        label_y, yanchor = _label_y_for_index(i)
+
+        fig.add_shape(
+            type="line",
+            x0=x,
+            x1=x,
+            y0=1,
+            y1=label_y,
+            line=dict(color=color, width=1.2),
+            opacity=0.6,
+        )
+        fig.add_annotation(
+            x=x,
+            y=label_y,
+            text=_truncate(item["label"], 28),
+            showarrow=False,
+            xanchor="center",
+            yanchor=yanchor,
+            font=dict(size=10, color="#222"),
+            bgcolor="rgba(255,255,255,0.9)",
+            bordercolor=color,
+            borderwidth=1,
+            borderpad=4,
+        )
+
+        xs.append(x)
+        ys.append(1)
+        colors.append(color)
+        hovers.append(item["hover"])
+
     fig.add_trace(go.Scatter(
-        x=[pd.Timestamp(window_start), pd.Timestamp(window_end)], y=[1, 1],
-        mode="lines", line=dict(color="#bbbbbb", width=2),
-        hoverinfo="skip", showlegend=False,
-    ))
-    # Markers with above-axis text labels
-    fig.add_trace(go.Scatter(
-        x=xs, y=ys, mode="markers+text", text=labels, textposition="top center",
+        x=xs,
+        y=ys,
+        mode="markers",
         marker=dict(color=colors, size=14, line=dict(color="white", width=1.5)),
-        hovertext=hovers, hoverinfo="text",
-        textfont=dict(size=11),
+        hovertext=hovers,
+        hoverinfo="text",
         showlegend=False,
     ))
     fig.update_layout(
-        title="Event narrative axis — markers coupled to price movement days",
-        height=260,
-        margin=dict(l=40, r=40, t=60, b=20),
-        xaxis=dict(showgrid=False),
+        title=dict(text="Event narrative axis", font=dict(size=14)),
+        height=320,
+        margin=dict(l=40, r=40, t=50, b=20),
+        xaxis=dict(
+            showgrid=False,
+            range=[pd.Timestamp(window_start), pd.Timestamp(window_end)],
+        ),
         yaxis=dict(visible=False, range=[0, 2]),
+        showlegend=False,
     )
     return fig
 
