@@ -184,18 +184,18 @@ def test_pick_headline_for_date_returns_none_when_no_match():
     assert event_axis.pick_headline_for_date(hits, "2026-03-02") is None
 
 
-def test_event_axis_label_y_alternates_above_below():
+def test_event_axis_label_y_spans_multiple_lanes():
     from ui import event_axis
 
-    above = event_axis._label_y_for_index(0)
-    below = event_axis._label_y_for_index(1)
-    above2 = event_axis._label_y_for_index(2)
+    lanes = [event_axis._label_y_for_index(i) for i in range(10)]
+    ys = [y for y, _ in lanes]
+    anchors = [a for _, a in lanes]
 
-    assert above[0] > 1.0
-    assert below[0] < 1.0
-    assert above2[0] == above[0]
-    assert above[1] == "bottom"
-    assert below[1] == "top"
+    assert len(set(ys)) == 10
+    assert min(ys) < 0.25
+    assert max(ys) > 1.75
+    assert anchors[0] == "bottom"
+    assert anchors[1] == "top"
 
 
 def test_event_axis_build_figure_pins_full_window_range():
@@ -224,6 +224,19 @@ def test_event_axis_build_figure_pins_full_window_range():
 
     assert fig.layout.xaxis.range[0] == pd.Timestamp("2026-02-27")
     assert fig.layout.xaxis.range[1] == pd.Timestamp("2026-04-15")
+
+
+def test_event_axis_translate_headline_to_english(monkeypatch):
+    from ui import event_axis
+
+    class _FakeLLM:
+        def invoke(self, messages):
+            assert "translate financial/news headlines" in messages[0].content.lower()
+            return type("Resp", (), {"content": "Oil retreats from weekly high"})()
+
+    monkeypatch.setattr(event_axis, "get_chat_model", lambda temperature=0.0, max_tokens=64: _FakeLLM())
+    translated = event_axis._headline_to_english.__wrapped__("النفط يتراجع من أعلى مستوى أسبوعي")
+    assert translated == "Oil retreats from weekly high"
 
 
 def test_format_supervisor_result_qa_has_citations():
