@@ -20,6 +20,14 @@ def format_detail_markdown(attr: Dict, target_date: str, symbol: str, pct_change
         "",
         f"**{attr.get('headline_summary', '').strip()}**",
         "",
+    ]
+    if attr.get("status") == "fallback" and attr.get("reason_detail"):
+        lines += [
+            "**Why this day is hard to explain**",
+            f"- {attr.get('reason_detail', '').strip()}",
+            "",
+        ]
+    lines += [
         "**Key drivers**",
     ]
     for d in attr.get("key_drivers", []) or []:
@@ -42,11 +50,14 @@ def format_detail_markdown(attr: Dict, target_date: str, symbol: str, pct_change
 
 @st.cache_data(show_spinner="Explaining the move...", ttl=3600)
 def _cached_explain(target_date_iso: str, symbol: str, name: str,
-                    pct_change: float, price_from: float, price_to: float) -> Dict:
+                    pct_change: float, price_from: float, price_to: float,
+                    event_display_name: str, seed_keywords: tuple[str, ...]) -> Dict:
     return explain_move(
         target_date=datetime.strptime(target_date_iso, "%Y-%m-%d").date(),
         symbol=symbol, name=name,
         pct_change=pct_change, price_from=price_from, price_to=price_to,
+        event_display_name=event_display_name,
+        seed_keywords=list(seed_keywords),
     )
 
 
@@ -90,6 +101,8 @@ def render(cfg: EventConfig, as_of: date) -> None:
         target_date_iso=sel, symbol=_SYMBOL, name=_NAME,
         pct_change=meta["pct_change"], price_from=meta["price_from"],
         price_to=meta["price_to"],
+        event_display_name=cfg.display_name,
+        seed_keywords=tuple(cfg.seed_keywords),
     )
     st.markdown(
         format_detail_markdown(attr, target_date=sel, symbol=_SYMBOL,

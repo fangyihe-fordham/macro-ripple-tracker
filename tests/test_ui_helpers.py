@@ -161,6 +161,24 @@ def test_format_detail_markdown_down_arrow_for_negative():
     assert "-3.1" in md or "−3.1" in md
 
 
+def test_format_detail_markdown_surfaces_failure_reason():
+    from ui import price_detail_panel as pdp
+    attribution = {
+        "direction": "up",
+        "headline_summary": "Price moved up +2.00% ($75.00 → $76.50); see news items below for context.",
+        "key_drivers": ["No clear attribution in available news."],
+        "caveats": ["Coverage for this date is thin."],
+        "supporting_news": [],
+        "status": "fallback",
+        "reason_code": "no_nearby_news",
+        "reason_detail": "Indexed event news exists, but none falls within ±2 days of this move.",
+    }
+    md = pdp.format_detail_markdown(attribution, target_date="2026-03-02",
+                                    symbol="BZ=F", pct_change=2.0)
+    assert "Why this day is hard to explain" in md
+    assert "±2 days" in md
+
+
 def test_pick_headline_for_date_prefers_causal_keywords():
     from ui import event_axis
     target = "2026-03-02"

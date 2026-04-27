@@ -16,7 +16,7 @@ from prompts import load as load_prompt
 
 
 _RETRIEVE_TOP_K = 20
-_DATE_WINDOW_DAYS = 3
+_DATE_WINDOW_DAYS = 2
 _MAX_SUPPORTING_NEWS = 3
 
 
@@ -51,17 +51,37 @@ def _direction(pct_change: float) -> str:
     return "flat"
 
 
+def _build_query(target_date: date, symbol: str, name: str,
+                 event_display_name: str = "",
+                 seed_keywords: Optional[List[str]] = None) -> str:
+    parts: List[str] = []
+    if event_display_name:
+        parts.append(event_display_name)
+    if seed_keywords:
+        parts.extend(seed_keywords)
+    parts.extend([name, symbol, target_date.isoformat()])
+    return " ".join(p for p in parts if p)
+
+
 def _fallback(pct_change: float, price_from: float, price_to: float,
-              close_hits: List[Dict]) -> Dict:
+              close_hits: List[Dict], reason_code: str) -> Dict:
     """Used when retrieval is empty OR the LLM response is unparseable.
     Surfaces raw retrieved news so the UI still has something to render."""
     direction = _direction(pct_change)
-    if not close_hits:
+    if reason_code == "no_retrieval":
+        summary = "No indexed event news matched this day; attribution unavailable."
+        reason_detail = "No indexed event news matched the event+ticker query for this date."
+    elif reason_code == "no_nearby_news":
+        summary = "No nearby event news was found in the ±2-day window around this move."
+        reason_detail = "Indexed event news exists, but none falls within ±2 days of this move."
+    elif not close_hits:
         summary = "No indexed news close to this date; attribution unavailable."
+        reason_detail = "No nearby indexed news was available to support a grounded explanation."
     else:
         summary = (f"Price moved {direction} {pct_change:+.2f}% "
                    f"(${price_from:.2f} → ${price_to:.2f}); "
                    f"see news items below for context.")
+        reason_detail = "Nearby news exists, but the evidence is too thin or inconsistent for a confident attribution."
     supporting = [
         {"url": h.get("url", ""),
          "headline": h.get("headline", ""),
@@ -74,12 +94,17 @@ def _fallback(pct_change: float, price_from: float, price_to: float,
         "key_drivers": ["No clear attribution in available news."] if close_hits else [],
         "caveats": ["Coverage for this date is thin."] if close_hits else [],
         "supporting_news": supporting,
+        "status": "fallback",
+        "reason_code": reason_code,
+        "reason_detail": reason_detail,
     }
 
 
 def explain_move(target_date: date, symbol: str, name: str,
                  pct_change: float, price_from: float, price_to: float,
-                 top_k: int = _RETRIEVE_TOP_K) -> Dict:
+                 top_k: int = _RETRIEVE_TOP_K,
+                 event_display_name: str = "",
+                 seed_keywords: Optional[List[str]] = None) -> Dict:
     """Return a structured attribution for the given ticker's net daily move.
 
     Shape: {direction, headline_summary, key_drivers, caveats, supporting_news}.
@@ -87,12 +112,21 @@ def explain_move(target_date: date, symbol: str, name: str,
     """
     # Broad event-scoped retrieval (vector store is not ticker-tagged), then
     # Python-side filter by date proximity.
-    query = f"{name} {symbol} {target_date.isoformat()}"
+    query = _build_query(
+        target_date=target_date,
+        symbol=symbol,
+        name=name,
+        event_display_name=event_display_name,
+        seed_keywords=seed_keywords,
+    )
     raw = retrieve(query, top_k=top_k)
+    if not raw:
+        return _fallback(pct_change, price_from, price_to, [], "no_retrieval")
+
     close = _filter_by_date(raw, target_date, _DATE_WINDOW_DAYS)
 
     if not close:
-        return _fallback(pct_change, price_from, price_to, [])
+        return _fallback(pct_change, price_from, price_to, [], "no_nearby_news")
 
     bullets = "\n".join(
         f"- [{(h.get('metadata') or {}).get('date','')}] {h.get('headline','')}: "
@@ -114,15 +148,18 @@ def explain_move(target_date: date, symbol: str, name: str,
     try:
         parsed = json.loads(text)
     except json.JSONDecodeError:
-        return _fallback(pct_change, price_from, price_to, close)
+        return _fallback(pct_change, price_from, price_to, close, "insufficient_evidence")
 
     # Shape gate — same pattern as Session-7 hardening for classify_intent / run_qa_agent.
     if not isinstance(parsed, dict):
-        return _fallback(pct_change, price_from, price_to, close)
+        return _fallback(pct_change, price_from, price_to, close, "insufficient_evidence")
     required = {"direction", "headline_summary", "key_drivers", "caveats", "supporting_news"}
     if not required.issubset(parsed.keys()):
-        return _fallback(pct_change, price_from, price_to, close)
+        return _fallback(pct_change, price_from, price_to, close, "insufficient_evidence")
 
     # Bound supporting_news length defensively even if the LLM ignored the rule.
     parsed["supporting_news"] = (parsed.get("supporting_news") or [])[:_MAX_SUPPORTING_NEWS]
+    parsed["status"] = "explained"
+    parsed["reason_code"] = ""
+    parsed["reason_detail"] = ""
     return parsed

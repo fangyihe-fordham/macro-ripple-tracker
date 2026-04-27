@@ -39,6 +39,21 @@ def test_filter_hits_by_date_proximity_keeps_close_dates():
     assert "https://x/4" not in urls  # 2026-02-15, -15d
 
 
+def test_build_query_includes_event_context():
+    q = ape._build_query(
+        target_date=date(2026, 3, 2),
+        symbol="BZ=F",
+        name="Brent Crude Oil",
+        event_display_name="2026 Iran War / Strait of Hormuz Closure",
+        seed_keywords=["Iran", "Hormuz", "shipping"],
+    )
+    assert "Brent Crude Oil" in q
+    assert "BZ=F" in q
+    assert "2026-03-02" in q
+    assert "Hormuz" in q
+    assert "Iran" in q
+
+
 def test_happy_path_returns_structured_attribution(monkeypatch):
     canned = {
         "direction": "up",
@@ -66,6 +81,8 @@ def test_happy_path_returns_structured_attribution(monkeypatch):
     assert len(out["key_drivers"]) == 2
     assert len(out["supporting_news"]) == 2
     assert out["supporting_news"][0]["url"] == "https://x/1"
+    assert out["status"] == "explained"
+    assert out["reason_code"] == ""
 
 
 def test_malformed_json_falls_back_with_raw_news(monkeypatch):
@@ -81,6 +98,8 @@ def test_malformed_json_falls_back_with_raw_news(monkeypatch):
     # Fallback populates supporting_news from raw retrieved hits (proximity-sorted)
     assert len(out["supporting_news"]) <= 3
     assert out["supporting_news"][0]["url"] in {"https://x/1", "https://x/3"}  # same-day hits
+    assert out["status"] == "fallback"
+    assert out["reason_code"] == "insufficient_evidence"
 
 
 def test_wrong_shape_json_falls_back(monkeypatch):
@@ -99,6 +118,7 @@ def test_wrong_shape_json_falls_back(monkeypatch):
     # (https://x/1 and https://x/3 are both 2026-03-02 in _SAMPLE_HITS).
     assert len(out["supporting_news"]) > 0
     assert out["supporting_news"][0]["url"] in {"https://x/1", "https://x/3"}
+    assert out["reason_code"] == "insufficient_evidence"
 
 
 def test_missing_required_keys_falls_back(monkeypatch):
@@ -120,6 +140,30 @@ def test_missing_required_keys_falls_back(monkeypatch):
     assert "key_drivers" in out and "caveats" in out
     assert len(out["supporting_news"]) > 0
     assert len(out["supporting_news"]) <= 3
+    assert out["reason_code"] == "insufficient_evidence"
+
+
+def test_raw_hits_but_none_within_two_days_sets_no_nearby_reason(monkeypatch):
+    far_hits = [
+        {
+            "url": "https://x/10",
+            "headline": "Oil reacts to port bottlenecks",
+            "text": "x",
+            "metadata": {"date": "2026-03-06"},
+            "score": 0.5,
+        }
+    ]
+    monkeypatch.setattr(ape, "retrieve", lambda q, top_k: far_hits)
+    monkeypatch.setattr(ape, "get_chat_model", lambda **kw: (_ for _ in ()).throw(
+        AssertionError("LLM should not be invoked when no nearby hits exist")))
+
+    out = ape.explain_move(
+        target_date=date(2026, 3, 2), symbol="BZ=F", name="Brent Crude Oil",
+        pct_change=2.0, price_from=75.0, price_to=76.5,
+    )
+    assert out["status"] == "fallback"
+    assert out["reason_code"] == "no_nearby_news"
+    assert out["supporting_news"] == []
 
 
 def test_empty_retrieval_returns_graceful_no_news(monkeypatch):
@@ -139,3 +183,5 @@ def test_empty_retrieval_returns_graceful_no_news(monkeypatch):
     assert out["key_drivers"] == []
     assert out["caveats"] == []
     assert "No indexed" in out["headline_summary"] or "thin" in out["headline_summary"].lower()
+    assert out["status"] == "fallback"
+    assert out["reason_code"] == "no_retrieval"
