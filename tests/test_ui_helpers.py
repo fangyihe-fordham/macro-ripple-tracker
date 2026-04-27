@@ -100,6 +100,31 @@ def test_build_figure_pct_mode_markers_use_pct_values():
     assert ys[1] == pytest.approx(12.31)
 
 
+def test_click_event_to_selected_date_uses_marker_pointindex():
+    """plotly_events returns a list of dicts with curveNumber + pointIndex.
+    Marker trace is curveNumber=1; line trace is curveNumber=0. We must only
+    set selected_date on a marker click, and use pointIndex to look up the
+    date from the moves list."""
+    from ui import price_chart
+
+    moves = [
+        {"date": "2026-03-02", "pct_change": 7.26, "price": 77.74, "direction": "up"},
+        {"date": "2026-03-12", "pct_change": 9.22, "price": 99.50, "direction": "up"},
+    ]
+
+    events = [{"x": "2026-03-12", "y": 99.5, "curveNumber": 1, "pointIndex": 1, "pointNumber": 1}]
+    iso = price_chart._click_event_to_iso(events, moves)
+    assert iso == "2026-03-12"
+
+    events = [{"x": "2026-03-12", "y": 99.5, "curveNumber": 0, "pointIndex": 5, "pointNumber": 5}]
+    assert price_chart._click_event_to_iso(events, moves) is None
+
+    assert price_chart._click_event_to_iso([], moves) is None
+
+    events = [{"x": "x", "y": 0, "curveNumber": 1, "pointIndex": 99, "pointNumber": 99}]
+    assert price_chart._click_event_to_iso(events, moves) is None
+
+
 def test_format_detail_markdown_renders_all_sections():
     from ui import price_detail_panel as pdp
     attribution = {

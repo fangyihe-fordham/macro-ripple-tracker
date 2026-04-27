@@ -15,6 +15,7 @@ _DEFAULT_THRESHOLD_PCT = 3.0
 _UP_COLOR = "#d32f2f"   # red — up moves on oil are bad-news-y for demand
 _DOWN_COLOR = "#2e7d32"  # green
 _LINE_COLOR = "#1976d2"
+_MARKERS_CURVE_INDEX = 1  # 0=line trace, 1=markers trace (build_figure adds them in this order)
 
 
 def significant_moves(prices: pd.Series, threshold_pct: float = _DEFAULT_THRESHOLD_PCT) -> List[Dict]:
@@ -106,6 +107,19 @@ def build_figure(prices: pd.Series, moves: List[Dict],
     return fig
 
 
+def _click_event_to_iso(events: list, moves: List[Dict]) -> Optional[str]:
+    """Map a plotly_events click result to an ISO date string."""
+    if not events:
+        return None
+    event = events[0]
+    if event.get("curveNumber") != _MARKERS_CURVE_INDEX:
+        return None
+    idx = event.get("pointIndex")
+    if not isinstance(idx, int) or idx < 0 or idx >= len(moves):
+        return None
+    return moves[idx]["date"]
+
+
 # Leading _ on _cfg: @st.cache_data cannot hash pydantic v2 EventConfig.
 # Same workaround as ui.ripple.fetch_tree.
 @st.cache_data(show_spinner=False, ttl=3600)
@@ -140,25 +154,22 @@ def render(cfg: EventConfig, as_of: date) -> None:
     moves = significant_moves(prices, threshold_pct=thresh)
     fig = build_figure(series_for_chart, moves, y_mode, title="")
 
-    event = st.plotly_chart(
-        fig, use_container_width=True,
-        on_select="rerun", selection_mode="points",
-        key="price_chart_select",
-    )
+    # Use streamlit-plotly-events for real click-on-marker behavior.
+    # Streamlit's native st.plotly_chart(on_select=...) only fires when the
+    # user activates the box/lasso-select tool from the modebar.
+    from streamlit_plotly_events import plotly_events
 
-    # Streamlit 1.39 returns a dict-like object with .selection.points when
-    # on_select="rerun". Only markers (trace name == "markers") carry
-    # customdata=[ISO date]; line-point clicks have None customdata and we ignore.
-    if event and getattr(event, "selection", None):
-        pts = event.selection.get("points", []) if isinstance(event.selection, dict) \
-              else getattr(event.selection, "points", [])
-        for p in pts:
-            cd = p.get("customdata") if isinstance(p, dict) else getattr(p, "customdata", None)
-            if cd:
-                # customdata may be a list (one-element) or a scalar depending on plotly version
-                iso = cd[0] if isinstance(cd, list) else cd
-                st.session_state["selected_date"] = iso
-                break
+    click_events = plotly_events(
+        fig,
+        click_event=True,
+        select_event=False,
+        hover_event=False,
+        override_height=420,
+        key="price_chart_clicks",
+    )
+    iso = _click_event_to_iso(click_events, moves)
+    if iso is not None:
+        st.session_state["selected_date"] = iso
 
     # Render the currently-selected date below the chart as a breadcrumb.
     sel = st.session_state.get("selected_date")
