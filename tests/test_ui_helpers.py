@@ -285,6 +285,36 @@ def test_tree_to_graph_elements_returns_id_to_data_map():
     assert fert_node["supporting_news"][0]["url"] == "u2"
 
 
+def test_branch_nodes_for_selected_id_returns_ancestor_chain_only():
+    from ui import ripple
+
+    tree = {
+        "event": "Hormuz",
+        "nodes": [
+            {"sector": "Crude Oil", "mechanism": "m1", "severity": "critical",
+             "price_change": 41.3, "supporting_news": [], "children": [
+                 {"sector": "Natural Gas", "mechanism": "m2", "severity": "critical",
+                  "price_change": 7.4, "supporting_news": [], "children": [
+                      {"sector": "Fertilizer", "mechanism": "m3", "severity": "significant",
+                       "price_change": 25.3, "supporting_news": [], "children": []},
+                  ]},
+             ]},
+            {"sector": "Defense", "mechanism": "m4", "severity": "moderate",
+             "price_change": 8.0, "supporting_news": [], "children": []},
+        ],
+    }
+
+    branch = ripple._branch_nodes_for_id(tree, "n3")
+    assert [node["sector"] for node in branch] == [
+        "Crude Oil",
+        "Natural Gas",
+        "Fertilizer",
+    ]
+
+    assert ripple._branch_nodes_for_id(tree, "n4")[0]["sector"] == "Defense"
+    assert ripple._branch_nodes_for_id(tree, "missing") == []
+
+
 def test_sector_to_annotated_sorts_by_date_and_maps_severity_color():
     from ui import event_axis
 

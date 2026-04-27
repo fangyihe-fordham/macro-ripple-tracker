@@ -65,6 +65,25 @@ def tree_to_graph_elements(tree: Dict) -> Tuple[List[Node], List[Edge], Dict[str
     return nodes, edges, id_map
 
 
+def _branch_nodes_for_id(tree: Dict, target_id: str) -> List[Dict]:
+    """Return the ancestor chain ending at target_id, using ripple node ids."""
+    counter = {"i": 0}
+
+    def _walk(children: List[Dict], branch: List[Dict]) -> List[Dict]:
+        for node in children:
+            counter["i"] += 1
+            node_id = f"n{counter['i']}"
+            next_branch = branch + [node]
+            if node_id == target_id:
+                return next_branch
+            found = _walk(node.get("children", []), next_branch)
+            if found:
+                return found
+        return []
+
+    return _walk(tree.get("nodes", []), [])
+
+
 # Leading _ on _cfg: @st.cache_data can't hash pydantic v2 EventConfig
 # (non-frozen → __hash__=None). Same pattern as ui.timeline.
 @st.cache_data(show_spinner="Generating ripple tree...", ttl=3600)
@@ -73,7 +92,7 @@ def fetch_tree(_cfg: EventConfig, as_of: date) -> Dict:
     return result.get("ripple_tree", {})
 
 
-def _render_node_detail(node: Dict, depth: int = 0) -> None:
+def _render_node_summary(node: Dict, depth: int = 0) -> None:
     pad = "&nbsp;" * (depth * 4)
     pc = node.get("price_change")
     pc_str = f"{pc:+.1f}%" if isinstance(pc, (int, float)) else "—"
@@ -90,6 +109,10 @@ def _render_node_detail(node: Dict, depth: int = 0) -> None:
             f"{pad}&nbsp;&nbsp;↳ [{src.get('headline','(link)')}]({src.get('url','')}) · {src.get('date','')}",
             unsafe_allow_html=True,
         )
+
+
+def _render_node_detail(node: Dict, depth: int = 0) -> None:
+    _render_node_summary(node, depth)
     for c in node.get("children", []):
         _render_node_detail(c, depth + 1)
 
@@ -111,6 +134,7 @@ def render(cfg: EventConfig, as_of: date) -> None:
     if isinstance(clicked_id, str) and clicked_id in id_map:
         node_data = id_map[clicked_id]
         selected_sector = {
+            "node_id": clicked_id,
             "sector": node_data.get("sector", "?"),
             "mechanism": node_data.get("mechanism", ""),
             "severity": node_data.get("severity", "moderate"),
@@ -125,6 +149,16 @@ def render(cfg: EventConfig, as_of: date) -> None:
     )
 
     st.markdown("### Node details")
-    with st.expander("All nodes (flat)"):
-        for n in tree["nodes"]:
-            _render_node_detail(n)
+    selected_sector = st.session_state.get("selected_sector")
+    selected_id = selected_sector.get("node_id") if isinstance(selected_sector, dict) else None
+    branch_nodes = _branch_nodes_for_id(tree, selected_id) if isinstance(selected_id, str) else []
+
+    if branch_nodes:
+        branch_label = selected_sector.get("sector", branch_nodes[-1].get("sector", "?"))
+        with st.expander(f"Selected branch: {branch_label}", expanded=True):
+            for depth, node in enumerate(branch_nodes):
+                _render_node_summary(node, depth)
+    else:
+        with st.expander("All nodes (flat)"):
+            for n in tree["nodes"]:
+                _render_node_detail(n)
