@@ -39,6 +39,11 @@ _LABEL_LANES = [
     (1.90, "bottom"),
     (0.10, "top"),
 ]
+_SEVERITY_COLORS = {
+    "critical": "#d32f2f",
+    "significant": "#f57c00",
+    "moderate": "#fbc02d",
+}
 
 
 def pick_headline_for_date(hits: List[Dict], target_iso: str) -> Optional[Dict]:
@@ -166,7 +171,8 @@ def _build_figure(dates_with_headlines: List[Dict], window_start: date, window_e
 
     for item in laid_out:
         x = pd.Timestamp(item["date"])
-        color = item.get("color") or (_UP_COLOR if item["direction"] == "up" else _DOWN_COLOR)
+        direction = item.get("direction", "up")
+        color = item.get("color") or (_UP_COLOR if direction == "up" else _DOWN_COLOR)
 
         if item.get("show_label"):
             label_y = item["label_y"]
@@ -226,8 +232,60 @@ def _truncate(s: str, n: int = 60) -> str:
     return s if len(s) <= n else s[: n - 1].rstrip() + "…"
 
 
+def _sector_to_annotated(sector: Dict) -> List[Dict]:
+    """Convert a selected ripple node into the event-axis annotated shape."""
+    severity = sector.get("severity", "moderate")
+    color = _SEVERITY_COLORS.get(severity, "#9e9e9e")
+    mechanism = sector.get("mechanism", "")
+    annotated: List[Dict] = []
+
+    hits = sector.get("supporting_news", []) or []
+    for hit in sorted(hits, key=lambda item: item.get("date", "")):
+        date_str = hit.get("date", "")
+        if not date_str:
+            continue
+        headline = hit.get("headline", "")
+        english_headline = _headline_to_english(headline) if headline else ""
+        label = english_headline
+        hover_bits = [f"<b>{sector.get('sector', '?')}</b> · {date_str}"]
+        if mechanism:
+            hover_bits.append(mechanism)
+        hover_bits.append(english_headline or "English translation unavailable")
+        annotated.append({
+            "date": date_str,
+            "label": label,
+            "hover": "<br>".join(hover_bits),
+            "color": color,
+        })
+
+    return annotated
+
+
 def render(cfg: EventConfig, as_of: date) -> None:
     st.subheader("Event narrative")
+
+    sector = st.session_state.get("selected_sector")
+    if sector:
+        col_label, col_back = st.columns([8, 2])
+        with col_label:
+            sev = sector.get("severity", "moderate")
+            st.caption(
+                f"Showing news for **{sector.get('sector', '?')}** "
+                f"(severity: `{sev}`)"
+            )
+        with col_back:
+            if st.button("Back to price view", key="event_axis_back"):
+                st.session_state.pop("selected_sector", None)
+                st.rerun()
+
+        annotated = _sector_to_annotated(sector)
+        if not annotated:
+            st.info("No news cited for this sector.")
+            return
+        fig = _build_figure(annotated, window_start=cfg.baseline_date, window_end=as_of)
+        st.plotly_chart(fig, use_container_width=True)
+        return
+
     prices = get_price_range(_PRIMARY_SYMBOL, cfg.baseline_date, as_of)
     if prices.empty:
         st.warning(f"No price data for {_PRIMARY_SYMBOL}.")

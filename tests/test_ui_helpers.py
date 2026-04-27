@@ -18,7 +18,7 @@ def test_ripple_tree_to_graph_elements():
              "price_change": 8.0, "supporting_news": [], "children": []},
         ],
     }
-    nodes, edges = ripple.tree_to_graph_elements(tree)
+    nodes, edges, _id_map = ripple.tree_to_graph_elements(tree)
     assert len(nodes) == 4
     assert len(edges) == 3
     labels = [n.label for n in nodes]
@@ -257,6 +257,59 @@ def test_event_axis_translate_headline_to_english(monkeypatch):
     assert translated == "Oil retreats from weekly high"
 
 
+def test_tree_to_graph_elements_returns_id_to_data_map():
+    from ui import ripple
+
+    tree = {
+        "event": "Hormuz",
+        "nodes": [
+            {"sector": "Oil", "mechanism": "m1", "severity": "critical",
+             "price_change": 49.6,
+             "supporting_news": [{"url": "u1", "headline": "h1", "date": "2026-03-02"}],
+             "children": [
+                 {"sector": "Fertilizer", "mechanism": "m2", "severity": "significant",
+                  "price_change": 15.0,
+                  "supporting_news": [{"url": "u2", "headline": "h2", "date": "2026-03-09"}],
+                  "children": []},
+             ]},
+        ],
+    }
+
+    nodes, edges, id_map = ripple.tree_to_graph_elements(tree)
+    assert len(nodes) == 3
+    assert len(edges) == 2
+
+    ids = [n.id for n in nodes if n.id != "root"]
+    assert set(id_map.keys()) == set(ids)
+    fert_node = next(v for v in id_map.values() if v["sector"] == "Fertilizer")
+    assert fert_node["supporting_news"][0]["url"] == "u2"
+
+
+def test_sector_to_annotated_sorts_by_date_and_maps_severity_color():
+    from ui import event_axis
+
+    sector = {
+        "sector": "Fertilizer",
+        "mechanism": "Ammonia cost spike",
+        "severity": "significant",
+        "supporting_news": [
+            {"url": "u2", "headline": "CF Industries reports earnings", "date": "2026-03-15"},
+            {"url": "u1", "headline": "Ammonia rallies on gas", "date": "2026-03-09"},
+        ],
+    }
+
+    annotated = event_axis._sector_to_annotated(sector)
+    assert len(annotated) == 2
+    assert [item["date"] for item in annotated] == ["2026-03-09", "2026-03-15"]
+    assert "Ammonia" in annotated[0]["label"]
+    assert annotated[0]["color"] == "#f57c00"
+    assert "Fertilizer" in annotated[0]["hover"]
+
+    empty_sector = {"sector": "X", "mechanism": "y", "severity": "critical",
+                    "supporting_news": []}
+    assert event_axis._sector_to_annotated(empty_sector) == []
+
+
 def test_format_supervisor_result_qa_has_citations():
     from ui import sidebar_chat
     result = {
@@ -324,7 +377,7 @@ def test_ripple_node_size_scales_with_severity():
         {"sector": "B", "severity": "significant", "price_change": 5, "children": []},
         {"sector": "C", "severity": "moderate", "price_change": 2, "children": []},
     ]}
-    nodes, _ = ripple.tree_to_graph_elements(tree)
+    nodes, _, _ = ripple.tree_to_graph_elements(tree)
     by_label = {n.label: n for n in nodes}
     assert by_label["A"].size > by_label["B"].size > by_label["C"].size
 
@@ -335,7 +388,7 @@ def test_ripple_node_title_contains_mechanism_and_pct():
         {"sector": "Oil", "mechanism": "Hormuz closure", "severity": "critical",
          "price_change": 49.6, "children": []},
     ]}
-    nodes, _ = ripple.tree_to_graph_elements(tree)
+    nodes, _, _ = ripple.tree_to_graph_elements(tree)
     oil = next(n for n in nodes if n.id != "root")
     # Plotly/streamlit-agraph uses `title` for hover tooltip text
     assert "Hormuz closure" in oil.title

@@ -62,14 +62,16 @@ def main() -> None:
     )
     if st.sidebar.button("Clear cache & refresh"):
         st.cache_data.clear()
-        # Forget any selected date on a full refresh
+        # Forget any selected date / sector on a full refresh
         st.session_state.pop("selected_date", None)
+        st.session_state.pop("selected_sector", None)
         st.rerun()
 
-    # Reset selected_date if the event changed, so clicks from a prior event
-    # don't surface on the new one.
+    # Reset selected_date / selected_sector if the event changed, so clicks
+    # from a prior event don't surface on the new one.
     if st.session_state.get("_last_event") != event_name:
         st.session_state.pop("selected_date", None)
+        st.session_state.pop("selected_sector", None)
         st.session_state["_last_event"] = event_name
 
     # Main — three vertical zones
