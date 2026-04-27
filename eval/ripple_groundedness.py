@@ -25,8 +25,8 @@ def score(tree: Dict, truth_sectors: List[str]) -> Dict:
     matched_truths = set()
     matched_ai = set()
 
-    for truth in truth_sectors:
-        for ai in ai_sectors:
+    for ai in ai_sectors:
+        for truth in truth_sectors:
             if _fuzzy_contains(ai, truth) or _fuzzy_contains(truth, ai):
                 matched_truths.add(truth)
                 matched_ai.add(ai)

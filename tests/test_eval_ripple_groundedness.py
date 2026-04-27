@@ -22,6 +22,22 @@ def test_match_sectors_exact_and_fuzzy():
     assert result["recall"] == pytest.approx(3 / 4)
 
 
+def test_multiple_ai_sectors_can_match_one_truth_sector():
+    tree = {"event": "x", "nodes": [
+        {"sector": "Fertilizer / Ammonia", "children": []},
+        {"sector": "Fertilizer Industry", "children": []},
+        {"sector": "Crypto Moon Lambo", "children": []},
+    ]}
+    truth = ["Fertilizer / Ammonia"]
+
+    result = ripple_groundedness.score(tree, truth)
+
+    assert set(result["matched"]) == {"Fertilizer / Ammonia"}
+    assert set(result["hallucinated"]) == {"Crypto Moon Lambo"}
+    assert result["precision"] == pytest.approx(2 / 3)
+    assert result["recall"] == pytest.approx(1 / 1)
+
+
 def test_price_change_matches_real_data():
     tree = {"event": "x", "nodes": [
         {"sector": "Oil", "price_change": 49.6, "price_details": [
