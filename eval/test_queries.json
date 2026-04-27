@@ -1,0 +1,58 @@
+{
+  "retrieval": [
+    {
+      "id": "r1",
+      "query": "How high did Brent crude go after Hormuz closed?",
+      "must_be_about": ["Brent", "oil price", "crude"]
+    },
+    {
+      "id": "r2",
+      "query": "Did shipping rates change after the Iran war started?",
+      "must_be_about": ["shipping", "freight", "tanker", "insurance"]
+    },
+    {
+      "id": "r3",
+      "query": "What is happening with LNG exports from Qatar?",
+      "must_be_about": ["LNG", "Qatar", "natural gas", "exports"]
+    },
+    {
+      "id": "r4",
+      "query": "Fertilizer producers affected by Iran war",
+      "must_be_about": ["fertilizer", "ammonia", "CF", "urea"]
+    },
+    {
+      "id": "r5",
+      "query": "Defense stocks reaction to Iran escalation",
+      "must_be_about": ["defense", "Lockheed", "Raytheon", "military", "ITA"]
+    }
+  ],
+  "qa": [
+    {
+      "id": "q1",
+      "query": "Why would the closure of the Strait of Hormuz affect global oil prices?"
+    },
+    {
+      "id": "q2",
+      "query": "How did the Iran war affect fertilizer production costs?"
+    },
+    {
+      "id": "q3",
+      "query": "Which shipping companies were most impacted by tanker insurance rate increases?"
+    },
+    {
+      "id": "q4",
+      "query": "What were the top price movers in the week after Hormuz closed?"
+    },
+    {
+      "id": "q5",
+      "query": "How did defense stocks move and why?"
+    }
+  ],
+  "market_integrity": [
+    {"symbol": "BZ=F", "date": "2026-03-02"},
+    {"symbol": "CL=F", "date": "2026-03-03"},
+    {"symbol": "XLE", "date": "2026-03-04"},
+    {"symbol": "NG=F", "date": "2026-03-05"},
+    {"symbol": "^GSPC", "date": "2026-03-06"}
+  ]
+}
