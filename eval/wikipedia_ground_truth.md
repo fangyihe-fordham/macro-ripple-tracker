@@ -1,8 +1,9 @@
 # Ground Truth — 2026 Strait of Hormuz Crisis Economic Impact
 
-Source: Wikipedia "2026 Strait of Hormuz crisis" (retrieved YYYY-MM-DD).
+Source: compiled on 2026-04-27 from Wikipedia "2026 Strait of Hormuz crisis",
+"Economic impact of the 2026 Iran war", and "2026 Iran war fuel crisis".
 
-## Sectors directly impacted (critical / significant)
+## Core sectors directly impacted (used for matching)
 
 - Oil Supply (crude, refined products)
 - Natural Gas / LNG (Qatar exports)
@@ -13,8 +14,19 @@ Source: Wikipedia "2026 Strait of Hormuz crisis" (retrieved YYYY-MM-DD).
 - Aluminum / energy-intensive metals
 - Defense / Aerospace
 - Broad equity markets (risk-off)
+- LPG
+- Methanol / Chemical feedstocks
+- Sulfur / Sulfuric acid
+
+## Secondary / optional ripple sectors (reference only, not scored for recall unless evaluator is extended)
+
+- Helium / Industrial gases
+- Food / Grocery supply (GCC region)
+- Desalination / Water utilities
+- European gas-intensive manufacturing (steel, chemicals)
 
 ## Notes
 
-- Populate this file at eval time by hand-reading the Wikipedia article.
-- Sector names are normalized: use these canonical strings when matching.
+- Sector names are normalized: use the core-sector strings above when matching.
+- Secondary sectors are kept as analyst reference and should not count against recall
+  unless the evaluator is explicitly extended to score long-tail ripple coverage.
