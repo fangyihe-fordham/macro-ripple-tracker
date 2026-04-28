@@ -1,0 +1,532 @@
+{
+  "retrieval": {
+    "metric": "precision@5",
+    "mean_precision": 0.76,
+    "per_query": [
+      {
+        "id": "r1",
+        "query": "How high did Brent crude go after Hormuz closed?",
+        "retrieved": 5,
+        "relevant": 3,
+        "precision": 0.6,
+        "hits": [
+          {
+            "url": "https://markets.financialcontent.com/stocks/article/marketminute-2026-3-27-global-markets-shaken-as-brent-crude-surpasses-110-amid-strait-of-hormuz-blockade",
+            "headline": "FinancialContent - Global Markets Shaken as Brent Crude Surpasses $110 Amid Strait of Hormuz Blockade",
+            "relevant": true
+          },
+          {
+            "url": "https://www.baltimoresun.com/2026/03/19/energy-prices-financial-markets/",
+            "headline": "Brent crude nears $115 after Iran attacks Gulf energy facilities",
+            "relevant": false
+          },
+          {
+            "url": "https://www.philstar.com/business/2026/04/06/2519041/us-crude-benchmark-opens-over-113-brent-above-110",
+            "headline": "US crude benchmark opens over $113 , Brent above $110",
+            "relevant": false
+          },
+          {
+            "url": "https://www.livecharts.co.uk/livewire/2026/03/brent-smashes-higher-as-the-strait-of-hormuz-is-closed/",
+            "headline": "Brent Smashes Higher As The Strait Of Hormuz Is Closed | Live Wire",
+            "relevant": true
+          },
+          {
+            "url": "https://www.thehindubusinessline.com/markets/commodities/crude-oil-could-top-100-as-strait-of-hormuz-closure-halts-flows/article70694535.ece",
+            "headline": "Crude oil could top $100 as Strait of Hormuz closure halts flows",
+            "relevant": true
+          }
+        ]
+      },
+      {
+        "id": "r2",
+        "query": "Did shipping rates change after the Iran war started?",
+        "retrieved": 5,
+        "relevant": 4,
+        "precision": 0.8,
+        "hits": [
+          {
+            "url": "https://www.thedailystar.net/business/news/iran-war-shakes-global-shipping-routes-4118621",
+            "headline": "Iran war shakes up global shipping routes",
+            "relevant": true
+          },
+          {
+            "url": "https://www.channelnewsasia.com/world/oil-shipping-prices-rise-iran-us-israel-war-strait-hormuz-5965676",
+            "headline": "Middle East oil shipping costs surge to all - time high as Iran war intensifies",
+            "relevant": true
+          },
+          {
+            "url": "https://natlawreview.com/article/iran-war-and-international-shipping-navigating-disruption-and-legal-risk",
+            "headline": "The Shipping and Logistic Consequesces of US Conflict in Iran",
+            "relevant": true
+          },
+          {
+            "url": "https://www.hellenicshippingnews.com/after-the-iran-war-how-fast-could-global-trade-recover/",
+            "headline": "After the Iran war , how fast could global trade recover ? | Hellenic Shipping News Worldwide",
+            "relevant": false
+          },
+          {
+            "url": "https://www.dawn.com/news/1978052/iran-conflict-disrupts-global-shipping-as-tankers-are-stranded",
+            "headline": "Iran conflict disrupts global shipping as tankers are stranded - Newspaper",
+            "relevant": true
+          }
+        ]
+      },
+      {
+        "id": "r3",
+        "query": "What is happening with LNG exports from Qatar?",
+        "retrieved": 5,
+        "relevant": 5,
+        "precision": 1.0,
+        "hits": [
+          {
+            "url": "https://www.moneycontrol.com/news/business/qatar-s-lng-export-halt-extends-to-longest-since-at-least-2008-13856819.html",
+            "headline": "Qatar LNG export halt extends to longest since at least 2008",
+            "relevant": true
+          },
+          {
+            "url": "https://www.naturalnews.com/2026-04-08-qatar-lng-export-disruption-continues.html",
+            "headline": "Qatar LNG Export Disruption Continues as Tankers Divert from Strait of Hormuz \u2013 NaturalNews . com",
+            "relevant": true
+          },
+          {
+            "url": "https://timesofoman.com/article/169205-qatar-will-start-supplying-lng-to-india-once-route-is-open-govt-sources",
+            "headline": "Qatar will start supplying LNG to India once route is open : Govt sources",
+            "relevant": true
+          },
+          {
+            "url": "https://www.firstpost.com/business/qatar-lng-outage-wipes-out-2026-supply-surplus-morgan-stanley-13987532.html",
+            "headline": "Qatar LNG outage could wipe out global supply surplus in 2026 : Morgan Stanley \u2013 Firstpost",
+            "relevant": true
+          },
+          {
+            "url": "https://www.businesstoday.in/latest/corporate/story/qatarenergy-halts-lng-output-petronet-lng-issues-force-majeure-notice-amid-west-asia-tensions-519115-2026-03-04",
+            "headline": "QatarEnergy halts LNG output , Petronet LNG issues force majeure notice amid West Asia tensions",
+            "relevant": true
+          }
+        ]
+      },
+      {
+        "id": "r4",
+        "query": "Fertilizer producers affected by Iran war",
+        "retrieved": 5,
+        "relevant": 5,
+        "precision": 1.0,
+        "hits": [
+          {
+            "url": "https://hpj.com/2026/03/14/iran-war-raises-new-fertilizer-concerns-2/",
+            "headline": "Iran war raises new fertilizer concerns\u00a0 - High Plains Journal",
+            "relevant": true
+          },
+          {
+            "url": "https://www.agweek.com/news/policy/how-does-the-iran-war-affect-fertilizer-supplies-prices-and-food-security",
+            "headline": "How does the Iran war affect fertilizer supplies , prices and food security ? ",
+            "relevant": true
+          },
+          {
+            "url": "https://finance.yahoo.com/markets/commodities/articles/war-iran-sparks-global-fertilizer-022616465.html",
+            "headline": "The war in Iran sparks a global fertilizer shortage and threatens food prices",
+            "relevant": true
+          },
+          {
+            "url": "https://www.thehindu.com/news/international/how-iran-war-could-create-fertiliser-shock-often-ignored-global-risk-to-food-prices-farming/article70721470.ece",
+            "headline": "How Iran war could create  fertilizer shock  \u2013 often ignored global risk to food prices , farming",
+            "relevant": true
+          },
+          {
+            "url": "https://www.thereporterethiopia.com/50059/",
+            "headline": "Fertilizer Supply Concerns Headline AU Report On Iran War Consequences For Africa",
+            "relevant": true
+          }
+        ]
+      },
+      {
+        "id": "r5",
+        "query": "Defense stocks reaction to Iran escalation",
+        "retrieved": 5,
+        "relevant": 2,
+        "precision": 0.4,
+        "hits": [
+          {
+            "url": "https://www.moneycontrol.com/news/business/markets/shipping-logistics-stocks-gain-on-iran-war-de-escalation-hopes-sci-delhivery-gain-up-to-7-13876484.html",
+            "headline": "Shipping , logistics stocks gain on Iran war de - escalation hopes ; SCI , Delhivery gain up to 7 % ",
+            "relevant": false
+          },
+          {
+            "url": "https://finance.yahoo.com/markets/world-indices/articles/asia-stocks-slide-us-iran-030245366.html",
+            "headline": "Asia stocks slide as US and Iran threaten to intensify war",
+            "relevant": true
+          },
+          {
+            "url": "https://www.marketscreener.com/news/oil-whipsaws-as-traders-weigh-iran-de-escalation-report-ce7e51dedc8af325",
+            "headline": "Oil whipsaws as traders weigh Iran de - escalation report",
+            "relevant": false
+          },
+          {
+            "url": "https://www.businessinsider.com/oil-prices-stock-market-today-ceasefire-iran-war-trump-2026-3",
+            "headline": "Oil tumbles and stocks soar on US plan to end the Iran war",
+            "relevant": true
+          },
+          {
+            "url": "https://www.moneycontrol.com/news/business/markets/oil-rises-as-investors-remain-wary-us-iran-ceasefire-will-open-supply-flow-13884125.html",
+            "headline": "Oil rises as investors remain wary US - Iran ceasefire will open supply flow - Moneycontrol . com",
+            "relevant": false
+          }
+        ]
+      }
+    ]
+  },
+  "ripple": {
+    "ai_sectors": [
+      "Global Energy Supply",
+      "Upstream Oil & Gas Producers",
+      "Oilfield Services & Equipment",
+      "Natural Gas & LNG Markets",
+      "European Power & Utilities",
+      "Petroleum Refining & Petrochemicals",
+      "Plastics & Synthetic Materials",
+      "Global Shipping & Maritime Trade",
+      "Tanker & Dry Bulk Shipping",
+      "Port & Logistics Infrastructure",
+      "Global Supply Chain & Manufacturing",
+      "Automotive & Electronics Manufacturing",
+      "Defense & Aerospace",
+      "Defense Contractors & Weapons Systems",
+      "Aerospace Components & Electronics",
+      "Cybersecurity & Intelligence",
+      "Critical Infrastructure Protection",
+      "Agriculture & Food Commodities",
+      "Fertilizer & Agricultural Chemicals",
+      "Crop Farming & Agribusiness",
+      "Grain & Oilseed Markets",
+      "Food Processing & Consumer Staples",
+      "Metals & Industrial Materials",
+      "Aluminum & Base Metals Smelting",
+      "Automotive & Construction Materials",
+      "Global Equity Markets & Risk Sentiment",
+      "Emerging Market Economies",
+      "Emerging Market Debt & Credit",
+      "Insurance & Reinsurance",
+      "Trade Finance & Letters of Credit"
+    ],
+    "truth_sectors": [
+      "Oil Supply",
+      "Natural Gas / LNG",
+      "Shipping / Tanker insurance",
+      "Fertilizer / Ammonia",
+      "Airlines / Jet fuel",
+      "Petrochemicals / Plastics",
+      "Aluminum / energy-intensive metals",
+      "Defense / Aerospace",
+      "Broad equity markets",
+      "LPG",
+      "Methanol / Chemical feedstocks",
+      "Sulfur / Sulfuric acid"
+    ],
+    "matched": [
+      "Aluminum / energy-intensive metals",
+      "Broad equity markets",
+      "Defense / Aerospace",
+      "Fertilizer / Ammonia",
+      "Natural Gas / LNG",
+      "Oil Supply",
+      "Petrochemicals / Plastics",
+      "Shipping / Tanker insurance"
+    ],
+    "missed": [
+      "Airlines / Jet fuel",
+      "LPG",
+      "Methanol / Chemical feedstocks",
+      "Sulfur / Sulfuric acid"
+    ],
+    "hallucinated": [
+      "Agriculture & Food Commodities",
+      "Automotive & Construction Materials",
+      "Automotive & Electronics Manufacturing",
+      "Critical Infrastructure Protection",
+      "Crop Farming & Agribusiness",
+      "Cybersecurity & Intelligence",
+      "Emerging Market Debt & Credit",
+      "Emerging Market Economies",
+      "European Power & Utilities",
+      "Food Processing & Consumer Staples",
+      "Global Energy Supply",
+      "Global Supply Chain & Manufacturing",
+      "Grain & Oilseed Markets",
+      "Oilfield Services & Equipment",
+      "Port & Logistics Infrastructure",
+      "Trade Finance & Letters of Credit"
+    ],
+    "precision": 0.4666666666666667,
+    "recall": 0.6666666666666666
+  },
+  "price_integrity": {
+    "ok_count": 37,
+    "mismatch_count": 0,
+    "mismatches": [],
+    "ok": [
+      {
+        "symbol": "CL=F",
+        "claimed": 41.28619394850783,
+        "actual": 41.28619394850783
+      },
+      {
+        "symbol": "BZ=F",
+        "claimed": 37.127476250510654,
+        "actual": 37.127476250510654
+      },
+      {
+        "symbol": "NG=F",
+        "claimed": -7.4151764810368,
+        "actual": -7.4151764810368
+      },
+      {
+        "symbol": "XLE",
+        "claimed": 1.1802640982129042,
+        "actual": 1.1802640982129042
+      },
+      {
+        "symbol": "CL=F",
+        "claimed": 41.28619394850783,
+        "actual": 41.28619394850783
+      },
+      {
+        "symbol": "BZ=F",
+        "claimed": 37.127476250510654,
+        "actual": 37.127476250510654
+      },
+      {
+        "symbol": "XLE",
+        "claimed": 1.1802640982129042,
+        "actual": 1.1802640982129042
+      },
+      {
+        "symbol": "XLE",
+        "claimed": 1.1802640982129042,
+        "actual": 1.1802640982129042
+      },
+      {
+        "symbol": "NG=F",
+        "claimed": -7.4151764810368,
+        "actual": -7.4151764810368
+      },
+      {
+        "symbol": "NG=F",
+        "claimed": -7.4151764810368,
+        "actual": -7.4151764810368
+      },
+      {
+        "symbol": "CF",
+        "claimed": 25.286314986379534,
+        "actual": 25.286314986379534
+      },
+      {
+        "symbol": "ALI=F",
+        "claimed": 19.824258848649094,
+        "actual": 19.824258848649094
+      },
+      {
+        "symbol": "BOAT",
+        "claimed": -2.553089235790799,
+        "actual": -2.553089235790799
+      },
+      {
+        "symbol": "BOAT",
+        "claimed": -2.553089235790799,
+        "actual": -2.553089235790799
+      },
+      {
+        "symbol": "BOAT",
+        "claimed": -2.553089235790799,
+        "actual": -2.553089235790799
+      },
+      {
+        "symbol": "^GSPC",
+        "claimed": 2.360848061172296,
+        "actual": 2.360848061172296
+      },
+      {
+        "symbol": "^GSPC",
+        "claimed": 2.360848061172296,
+        "actual": 2.360848061172296
+      },
+      {
+        "symbol": "ITA",
+        "claimed": -6.02740947309596,
+        "actual": -6.02740947309596
+      },
+      {
+        "symbol": "ITA",
+        "claimed": -6.02740947309596,
+        "actual": -6.02740947309596
+      },
+      {
+        "symbol": "ITA",
+        "claimed": -6.02740947309596,
+        "actual": -6.02740947309596
+      },
+      {
+        "symbol": "ITA",
+        "claimed": -6.02740947309596,
+        "actual": -6.02740947309596
+      },
+      {
+        "symbol": "CF",
+        "claimed": 25.286314986379534,
+        "actual": 25.286314986379534
+      },
+      {
+        "symbol": "ZW=F",
+        "claimed": 1.226215644820296,
+        "actual": 1.226215644820296
+      },
+      {
+        "symbol": "ZS=F",
+        "claimed": 0.5616763879887665,
+        "actual": 0.5616763879887665
+      },
+      {
+        "symbol": "CF",
+        "claimed": 25.286314986379534,
+        "actual": 25.286314986379534
+      },
+      {
+        "symbol": "NG=F",
+        "claimed": -7.4151764810368,
+        "actual": -7.4151764810368
+      },
+      {
+        "symbol": "ZW=F",
+        "claimed": 1.226215644820296,
+        "actual": 1.226215644820296
+      },
+      {
+        "symbol": "ZS=F",
+        "claimed": 0.5616763879887665,
+        "actual": 0.5616763879887665
+      },
+      {
+        "symbol": "ZW=F",
+        "claimed": 1.226215644820296,
+        "actual": 1.226215644820296
+      },
+      {
+        "symbol": "ZS=F",
+        "claimed": 0.5616763879887665,
+        "actual": 0.5616763879887665
+      },
+      {
+        "symbol": "^GSPC",
+        "claimed": 2.360848061172296,
+        "actual": 2.360848061172296
+      },
+      {
+        "symbol": "ALI=F",
+        "claimed": 19.824258848649094,
+        "actual": 19.824258848649094
+      },
+      {
+        "symbol": "ALI=F",
+        "claimed": 19.824258848649094,
+        "actual": 19.824258848649094
+      },
+      {
+        "symbol": "ALI=F",
+        "claimed": 19.824258848649094,
+        "actual": 19.824258848649094
+      },
+      {
+        "symbol": "^GSPC",
+        "claimed": 2.360848061172296,
+        "actual": 2.360848061172296
+      },
+      {
+        "symbol": "^GSPC",
+        "claimed": 2.360848061172296,
+        "actual": 2.360848061172296
+      },
+      {
+        "symbol": "^GSPC",
+        "claimed": 2.360848061172296,
+        "actual": 2.360848061172296
+      }
+    ]
+  },
+  "qa": {
+    "metric": "faithfulness",
+    "mean": 0.5333333333333333,
+    "per_query": [
+      {
+        "id": "q1",
+        "query": "Why would the closure of the Strait of Hormuz affect global oil prices?",
+        "answer": "The provided snippets contain relevant headlines but do not include the actual article text with specific factual details (such as volume of oil transiting the strait, percentage of global supply, etc.) that would allow me to make fully supported factual claims about the causal mechanisms.\n\n{\n  \"answer\": \"The available coverage indicates that a closure of the Strait of Hormuz would hinder global oil supply and could push crude oil prices to triple digits (above $100), and that it could upend global oil and gas supplies. However, the snippets do not provide the specific underlying details \u2014 such as the volume or share of global oil that transits the strait \u2014 needed to fully explain the causal mechanism.\",\n  \"citations\": [\n    {\"url\": \"https://www.shtfplan.com/headline-news/strait-of-hormuz-closure-hinders-global-oil-supply\", \"headline\": \"Strait of Hormuz Closure Hinders Global Oil Supply\", \"date\": \"2026-03-13\"},\n    {\"url\": \"https://www.thehindubusinessline.com/markets/commodities/crude-oil-could-top-100-as-strait-of-hormuz-closure-halts-flows/article70694535.ece\", \"headline\": \"Crude oil could top $100 as Strait of Hormuz closure halts flows\", \"date\": \"2026-03-02\"},\n    {\"url\": \"https://www.aol.co.uk/articles/us-israeli-war-iran-could-064328162.html\", \"headline\": \"How Iran closure of Strait of Hormuz could upend global oil and gas supplies\", \"date\": \"2026-03-03\"},\n    {\"url\": \"https://www.thehindu.com/business/Economy/why-does-the-strait-of-hormuzs-closure-matter/article70717010.ece\", \"headline\": \"Why does the Strait of Hormuz closure matter?\", \"date\": \"2026-03-08\"}\n  ]\n}",
+        "total_sentences": 3,
+        "supported_sentences": 2,
+        "faithfulness": 0.6666666666666666
+      },
+      {
+        "id": "q2",
+        "query": "How did the Iran war affect fertilizer production costs?",
+        "answer": "The provided snippets contain only headlines and URLs \u2014 no article body text with specific figures, mechanisms, or data about how the Iran war affected fertilizer production costs. The headlines indicate that the Iran war raised fertilizer concerns, drove up fuel and fertilizer prices, risked long-term shortages and price shocks, and sparked a global fertilizer shortage threatening food prices, but no specific details, percentages, or causal explanations are present in the snippets themselves.\n\n{\n  \"answer\": \"The available coverage indicates that the Iran war drove up fuel and fertilizer prices, raised concerns about long-term shortages and price shocks in global fertilizer markets, and sparked a global fertilizer shortage threatening food prices and food security. However, the snippets do not specify the precise mechanisms by which production costs were affected, nor do they provide specific figures or percentages.\",\n  \"citations\": [\n    {\"url\": \"https://www.ktvb.com/article/news/local/208/inside-ag-war-in-iran-drives-up-fuel-fertilizer-prices-posing-concerns-idaho-farmers/277-f93d19a1-5410-4c0a-ae0b-13950af4a708\", \"headline\": \"Inside Ag: War in Iran drives up fuel and fertilizer prices, posing concerns for Idaho farmers\", \"date\": \"2026-03-13\"},\n    {\"url\": \"https://www.theglobeandmail.com/business/article-iran-war-long-term-shortages-price-shocks-global-energy-fertilizer/\", \"headline\": \"Iran war risks long-term shortages, price shocks for global energy and fertilizer markets\", \"date\": \"2026-03-23\"},\n    {\"url\": \"https://finance.yahoo.com/markets/commodities/articles/war-iran-sparks-global-fertilizer-022616465.html\", \"headline\": \"The war in Iran sparks a global fertilizer shortage and threatens food prices\", \"date\": \"2026-03-28\"}\n  ]\n}",
+        "total_sentences": 4,
+        "supported_sentences": 4,
+        "faithfulness": 1.0
+      },
+      {
+        "id": "q3",
+        "query": "Which shipping companies were most impacted by tanker insurance rate increases?",
+        "answer": "The provided snippets reference a Gulf/Strait of Hormuz shipping crisis involving tanker insurance cancellations and rate increases, but they do not name specific shipping companies that were most impacted by the tanker insurance rate increases. The snippets describe the broader crisis (war risk cover cancellations, stranded tankers, all-time high shipping rates) without identifying particular shipping firms by name.\n\n{\n  \"answer\": \"The available coverage indicates that maritime insurers cancelled war risk cover in the Gulf and oil shipping rates climbed to all-time highs amid Middle East conflict, with tankers stranded and a shipping crisis deepening in the Strait of Hormuz. However, the snippets do not name specific shipping companies that were most impacted by the tanker insurance rate increases.\",\n  \"citations\": [\n    {\"url\": \"https://www.aljazeera.com/economy/2026/3/3/maritime-insurers-cancel-war-risk-cover-in-gulf-will-it-spike-energy-cost\", \"headline\": \"Maritime insurers cancel war risk cover in Gulf : Will it spike energy cost ?\", \"date\": \"2026-03-03\"},\n    {\"url\": \"https://www.channelstv.com/2026/03/03/oil-shipping-rates-climb-to-all-time-high-amid-middle-east-conflict/\", \"headline\": \"Oil Shipping Rates Climb To All-Time High Amid Middle East Conflict\", \"date\": \"2026-03-03\"},\n    {\"url\": \"https://cyprus-mail.com/2026/03/04/gulf-shipping-crisis-deepens-as-tankers-stranded-for-fifth-day\", \"headline\": \"Gulf shipping crisis deepens as tankers stranded for fifth day\", \"date\": \"2026-03-04\"},\n    {\"url\": \"https://www.yahoo.com/news/articles/5-oil-tankers-hit-insurance-150728160.html\", \"headline\": \"5 oil tankers hit , insurance companies cancel coverage\", \"date\": \"2026-03-03\"}\n  ]\n}",
+        "total_sentences": 4,
+        "supported_sentences": 4,
+        "faithfulness": 1.0
+      },
+      {
+        "id": "q4",
+        "query": "What were the top price movers in the week after Hormuz closed?",
+        "answer": "",
+        "total_sentences": 0,
+        "supported_sentences": 0,
+        "faithfulness": 0.0
+      },
+      {
+        "id": "q5",
+        "query": "How did defense stocks move and why?",
+        "answer": "",
+        "total_sentences": 0,
+        "supported_sentences": 0,
+        "faithfulness": 0.0
+      }
+    ]
+  },
+  "market_integrity": {
+    "metric": "market_integrity",
+    "ok_count": 5,
+    "missing_count": 0,
+    "results": [
+      {
+        "symbol": "BZ=F",
+        "date": "2026-03-02",
+        "close": 77.73999786376953
+      },
+      {
+        "symbol": "CL=F",
+        "date": "2026-03-03",
+        "close": 74.55999755859375
+      },
+      {
+        "symbol": "XLE",
+        "date": "2026-03-04",
+        "close": 56.189998626708984
+      },
+      {
+        "symbol": "NG=F",
+        "date": "2026-03-05",
+        "close": 3.003000020980835
+      },
+      {
+        "symbol": "^GSPC",
+        "date": "2026-03-06",
+        "close": 6740.02001953125
+      }
+    ]
+  }
+}
