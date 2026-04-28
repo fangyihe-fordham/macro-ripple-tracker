@@ -38,6 +38,47 @@ def test_multiple_ai_sectors_can_match_one_truth_sector():
     assert result["recall"] == pytest.approx(1 / 1)
 
 
+def test_score_credits_singular_plural_paraphrase():
+    tree = {"event": "x", "nodes": [
+        {"sector": "Airline & Aviation Industry", "children": []},
+    ]}
+    truth = ["Airlines / Jet fuel"]
+
+    result = ripple_groundedness.score(tree, truth)
+
+    assert "Airlines / Jet fuel" in result["matched"]
+    assert "Airline & Aviation Industry" not in result["hallucinated"]
+    assert result["precision"] == pytest.approx(1.0)
+
+
+def test_score_credits_paraphrased_subsector_via_shared_content_token():
+    tree = {"event": "x", "nodes": [
+        {"sector": "Industrial Metals & Materials", "children": []},
+        {"sector": "Marine Insurance & War Risk Underwriting", "children": []},
+    ]}
+    truth = ["Aluminum / energy-intensive metals", "Shipping / Tanker insurance"]
+
+    result = ripple_groundedness.score(tree, truth)
+
+    assert set(result["matched"]) == {
+        "Aluminum / energy-intensive metals",
+        "Shipping / Tanker insurance",
+    }
+    assert result["hallucinated"] == []
+
+
+def test_score_does_not_match_on_generic_words_alone():
+    tree = {"event": "x", "nodes": [
+        {"sector": "Global Energy Supply", "children": []},
+    ]}
+    truth = ["Oil Supply"]
+
+    result = ripple_groundedness.score(tree, truth)
+
+    assert "Oil Supply" not in result["matched"]
+    assert "Global Energy Supply" in result["hallucinated"]
+
+
 def test_price_change_matches_real_data():
     tree = {"event": "x", "nodes": [
         {"sector": "Oil", "price_change": 49.6, "price_details": [

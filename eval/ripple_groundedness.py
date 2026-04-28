@@ -1,4 +1,15 @@
-from typing import Dict, List
+import re
+from typing import Dict, List, Set
+
+
+_GENERIC_TOKENS = {
+    "industry", "industrie", "industrial",
+    "manufacturer", "manufacturing",
+    "service", "product", "sector",
+    "market", "system", "supply", "supplie",
+    "equipment", "global", "international",
+    "energy",
+}
 
 
 def _flatten_sectors(tree: Dict) -> List[str]:
@@ -13,11 +24,26 @@ def _flatten_sectors(tree: Dict) -> List[str]:
     return [sector for sector in out if sector]
 
 
+def _content_tokens(s: str) -> Set[str]:
+    out: Set[str] = set()
+    for tok in re.split(r"[^a-z]+", s.lower()):
+        if not tok or len(tok) < 3:
+            continue
+        if len(tok) > 4 and tok.endswith("s") and not tok.endswith("ss"):
+            tok = tok[:-1]
+        if tok in _GENERIC_TOKENS:
+            continue
+        out.add(tok)
+    return out
+
+
 def _fuzzy_contains(ai_sector: str, truth_sector: str) -> bool:
     ai = ai_sector.lower()
     truth = truth_sector.lower()
     parts = [part.strip() for part in truth.split("/")] + [truth]
-    return any(part in ai for part in parts if part)
+    if any(part in ai for part in parts if part):
+        return True
+    return bool(_content_tokens(ai_sector) & _content_tokens(truth_sector))
 
 
 def score(tree: Dict, truth_sectors: List[str]) -> Dict:
