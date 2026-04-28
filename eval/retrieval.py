@@ -1,12 +1,25 @@
-from typing import Dict, List
+from typing import Dict, List, Optional
 
+from config import EventConfig
 from data_news import retrieve
 
 from eval.judge import judge_relevance
+from eval.query_rewriter import rewrite
 
 
-def precision_at_k(q: Dict, k: int = 5) -> Dict:
-    hits = retrieve(q["query"], top_k=k)
+def precision_at_k(
+    q: Dict,
+    cfg: Optional[EventConfig] = None,
+    k: int = 5,
+    use_rewriter: bool = False,
+) -> Dict:
+    search_query = q["query"]
+    rewritten_query = None
+    if use_rewriter and cfg is not None:
+        rewritten_query = rewrite(q["query"], cfg)
+        search_query = rewritten_query
+
+    hits = retrieve(search_query, top_k=k)
     relevant = 0
     per_hit = []
 
@@ -26,6 +39,7 @@ def precision_at_k(q: Dict, k: int = 5) -> Dict:
     return {
         "id": q["id"],
         "query": q["query"],
+        "rewritten_query": rewritten_query,
         "retrieved": retrieved,
         "relevant": relevant,
         "precision": precision,
@@ -33,8 +47,16 @@ def precision_at_k(q: Dict, k: int = 5) -> Dict:
     }
 
 
-def run_retrieval_eval(queries: List[Dict], k: int = 5) -> Dict:
-    per_query = [precision_at_k(q, k=k) for q in queries]
+def run_retrieval_eval(
+    queries: List[Dict],
+    cfg: Optional[EventConfig] = None,
+    k: int = 5,
+    use_rewriter: bool = False,
+) -> Dict:
+    per_query = [
+        precision_at_k(q, cfg=cfg, k=k, use_rewriter=use_rewriter)
+        for q in queries
+    ]
     mean_precision = (
         sum(item["precision"] for item in per_query) / len(per_query)
         if per_query else 0.0
@@ -42,5 +64,6 @@ def run_retrieval_eval(queries: List[Dict], k: int = 5) -> Dict:
     return {
         "metric": f"precision@{k}",
         "mean_precision": mean_precision,
+        "use_rewriter": use_rewriter,
         "per_query": per_query,
     }

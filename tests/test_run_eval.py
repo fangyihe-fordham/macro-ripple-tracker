@@ -5,7 +5,9 @@ from eval import run_eval
 
 def test_run_eval_writes_report(monkeypatch, tmp_path):
     monkeypatch.setattr(run_eval, "run_retrieval_eval",
-                        lambda qs, k: {"metric": "precision@5", "mean_precision": 0.8, "per_query": []})
+                        lambda qs, cfg=None, k=5, use_rewriter=False: {
+                            "metric": "precision@5", "mean_precision": 0.8,
+                            "use_rewriter": use_rewriter, "per_query": []})
     monkeypatch.setattr(run_eval, "run_qa_eval",
                         lambda qs, cfg, as_of: {"metric": "faithfulness", "mean": 0.9, "per_query": []})
     monkeypatch.setattr(run_eval, "score",

@@ -51,7 +51,9 @@ def main(argv=None) -> str:
     as_of = date.fromisoformat(args.as_of) if args.as_of else cfg.end_date
     queries = _load_queries()
 
-    retrieval_report = run_retrieval_eval(queries["retrieval"], k=5)
+    retrieval_report = run_retrieval_eval(
+        queries["retrieval"], cfg=cfg, k=5, use_rewriter=True
+    )
     qa_report = run_qa_eval(queries["qa"], cfg, as_of)
 
     tree = generate_ripple_tree(
@@ -78,6 +80,7 @@ def main(argv=None) -> str:
         "",
         "## §9.1 Retrieval (precision@5)",
         f"- **Mean precision@5: {retrieval_report['mean_precision']:.2f}**  (target ≥ 0.80)",
+        f"- Query rewriting: {'enabled' if retrieval_report.get('use_rewriter') else 'disabled'}",
         "",
         "## §9.2 Ripple tree groundedness",
         f"- AI-generated sectors: {len(ripple_report['ai_sectors'])}",

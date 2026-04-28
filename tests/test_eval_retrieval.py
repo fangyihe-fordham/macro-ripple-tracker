@@ -1,3 +1,4 @@
+from config import load_event
 from eval import retrieval
 
 
@@ -32,3 +33,40 @@ def test_run_retrieval_eval_all(monkeypatch):
 
     assert report["mean_precision"] == 1.0
     assert len(report["per_query"]) == 5
+
+
+def test_precision_at_k_uses_rewriter_when_flag_set(monkeypatch):
+    captured_queries = []
+
+    def fake_retrieve(q, top_k):
+        captured_queries.append(q)
+        return []
+
+    monkeypatch.setattr(retrieval, "retrieve", fake_retrieve)
+    monkeypatch.setattr(retrieval, "rewrite", lambda query, cfg: f"REWRITTEN[{query}]")
+    monkeypatch.setattr(retrieval, "judge_relevance", lambda *a, **kw: True)
+
+    q = {"id": "r1", "query": "Why oil up?", "must_be_about": ["oil"]}
+    cfg = load_event("iran_war")
+    score = retrieval.precision_at_k(q, cfg=cfg, k=5, use_rewriter=True)
+
+    assert captured_queries == ["REWRITTEN[Why oil up?]"]
+    assert score["rewritten_query"] == "REWRITTEN[Why oil up?]"
+    assert score["query"] == "Why oil up?"
+
+
+def test_precision_at_k_does_not_call_rewriter_by_default(monkeypatch):
+    captured_queries = []
+
+    def fake_retrieve(q, top_k):
+        captured_queries.append(q)
+        return []
+
+    monkeypatch.setattr(retrieval, "retrieve", fake_retrieve)
+    monkeypatch.setattr(retrieval, "judge_relevance", lambda *a, **kw: True)
+
+    q = {"id": "r1", "query": "Why oil up?", "must_be_about": ["oil"]}
+    score = retrieval.precision_at_k(q, k=5)
+
+    assert captured_queries == ["Why oil up?"]
+    assert score.get("rewritten_query") is None
