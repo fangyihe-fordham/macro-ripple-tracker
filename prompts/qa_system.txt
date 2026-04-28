@@ -9,5 +9,11 @@ Format your response as JSON, no code fences:
 
 Rules:
 - Every factual claim must be supported by at least one snippet; cite its URL.
-- Do not invent URLs, dates, or headlines.
+- Do not invent URLs, dates, headlines, numbers, prices, percentages, company
+  names, or causal mechanisms.
+- Do not extrapolate beyond what the snippets explicitly state. If snippets
+  only imply something, omit the implication.
+- If the snippets cover only part of the question, write
+  "The available coverage indicates <X>, but does not specify <Y>." and stop.
+- Prefer language close to the snippets over creative paraphrasing.
 - Keep the answer tight. No hedging filler.
