@@ -14,9 +14,9 @@ All saved in `docs/superpowers/plans/`:
 
 - [`2026-04-16-plan-1-data-foundation.md`](docs/superpowers/plans/2026-04-16-plan-1-data-foundation.md) — **DONE + HARDENED (end of Session 4).** 12 tasks + 2 Session-3 infra follow-ups + 15 Session-4 hardening/cleanup commits (8 code-review-driven in Round 1, 6 user-directed in Round 2, 1 regression fix). All Plan 1 verification checklist items still green; live run delivers richer data (1,387 unique articles vs 1,217 in Session 3; retrieval top hit 0.533 vs 0.39).
 - [`2026-04-16-plan-2-agents.md`](docs/superpowers/plans/2026-04-16-plan-2-agents.md) — **DONE + REVIEWED + HARDENED (end of Session 7).** 15 tasks + 2 mid-plan code-review checkpoints (after Task 8 + after Task 13) + 1 post-completion comprehensive review (Session 7) driving a final hardening commit (`d98e492`). Plan 1 reconciliation (`35f46e2`) + Session-6 additions to plan file footer (`0.3.17` patch bump, `override=True` note, `strip_fences` hoist, Task-8 test snippet correction). Four deliberate deviations from plan text in Session 6, all user-approved at decision time (see progress.md). Session 7 added LLM-JSON shape validation, graceful `run.py` exits, defensive `.get()`/`None` guards in `agent_ripple`, and a README prompt-injection note. Suite: 60 passed + 4 skipped.
-- [`2026-04-16-plan-3-ui-eval.md`](docs/superpowers/plans/2026-04-16-plan-3-ui-eval.md) — **Tasks 1–3 DONE inline (Session 9, commits `1c0e0fa` → `c750b01` + Timeline-bug fix `a835bf0`); Tasks 4–5 SUPERSEDED by Plan 3.5; Tasks 6–12 (eval harness §9) NOT STARTED.** Plan 3 UI should call `setup.is_setup_in_progress()` before triggering `retrieve()` against ChromaDB — see `vector_store.py` docstring and C4 lock commit `e5a84ad`. Plan 3 UI must import `llm.get_chat_model()` (not instantiate `ChatAnthropic` directly) so it inherits Plan 2's `load_dotenv(override=True)` fix for the Claude-Desktop-empty-key quirk — see Library Quirks → `python-dotenv`. **Two Plan 3 UX decisions** (carried into Plan 3.5/3.6): (1) `status` field on news/qa empty-retrieval responses, (2) prompt-injection mitigation for news snippets — both still in `README.md` "Limitations" as deferred items.
+- [`2026-04-16-plan-3-ui-eval.md`](docs/superpowers/plans/2026-04-16-plan-3-ui-eval.md) — **Tasks 1–3 DONE inline (Session 9); Tasks 4–5 SUPERSEDED by Plan 3.5; Tasks 6–11 + iteration DONE (Session 11).** Tasks 6–11 stood up the §9 eval harness in commits `3932e2d` → `0e4dbda`. A follow-up iteration cycle in commits `c6e290c` → `afc4a69` ran v1 → v5 of the eval and drove ripple precision 21.2% → 48.1%, recall 58.3% → 75.0%, faithfulness 0.55 → 0.60 (see "Evaluation Iteration Story for Writeup" subsection below for the full narrative). Task 12 README is already in repo from earlier sessions. Plan 3 UI should call `setup.is_setup_in_progress()` before triggering `retrieve()` against ChromaDB — see `vector_store.py` docstring and C4 lock commit `e5a84ad`. Plan 3 UI must import `llm.get_chat_model()` (not instantiate `ChatAnthropic` directly) so it inherits Plan 2's `load_dotenv(override=True)` fix for the Claude-Desktop-empty-key quirk — see Library Quirks → `python-dotenv`. **Two Plan 3 UX decisions** (carried into Plan 3.5/3.6): (1) `status` field on news/qa empty-retrieval responses, (2) prompt-injection mitigation for news snippets — both still in `README.md` "Limitations" as deferred items.
 - [`2026-04-24-plan-3.5-ui-redesign.md`](docs/superpowers/plans/2026-04-24-plan-3.5-ui-redesign.md) — **DONE + REVIEWED (end of Session 9).** 9 tasks, executed via subagent-driven mode → 16 commits on `main` (`7b8f6a1` → `4b102aa`). Replaces 4-tab dashboard with single-page event-focused dashboard: sidebar (event picker + as-of + metadata + chat) + main `[ price_chart 70% | detail_panel 30% ]` + `event_axis` full + `ripple_tree` full. New leaf agent `agent_price_explainer.py` + `prompts/price_explainer_system.txt`. Carryover hardening landed: ripple agent now has English-only prompt + graceful `try/except` in `run_ripple_agent` (`7b8f6a1` + `2c94a5e`). Suite: 85 passed + 4 skipped. **Three live UX failures discovered in Plan 3.5's UI** are addressed in Plan 3.6 below — do NOT treat Plan 3.5 as production-ready; only a finished Plan 3.6 makes the UI demo-ready.
-- [`2026-04-26-plan-3.6-ui-interaction-fixes.md`](docs/superpowers/plans/2026-04-26-plan-3.6-ui-interaction-fixes.md) — **PARTIALLY EXECUTED (Session 10).** Task 1 landed cleanly (`52a269a`): real click handler via `streamlit-plotly-events`. Task 2 landed in two commits because the first visual pass (`bc67b5f`) passed tests but failed the user's live review; follow-up `dcc5850` reworked the axis into English-only, multi-lane, collision-suppressing labels and tightened retrieval relevance via `cfg.display_name`. The plan file now includes an Addendum with runtime corrections and a mandatory user-review gate after every task. **Task 3 has NOT started** — execution is blocked until the user reviews the revised Task-2 UI and explicitly says `continue`. One additional user-directed follow-up commit (`9c9334e`) is adjacent but **out of original Plan-3.6 scope**: it improved price-detail fallback diagnostics (`±2`-day window, stronger query, explicit `reason_code` / `reason_detail`). Plan-file end-state target is **91 passed + 4 skipped**; current repo state is **92 passed + 4 skipped** because of that extra diagnostics commit.
+- [`2026-04-26-plan-3.6-ui-interaction-fixes.md`](docs/superpowers/plans/2026-04-26-plan-3.6-ui-interaction-fixes.md) — **DONE (Session 11).** Task 1 landed cleanly in `52a269a` (real click handler via `streamlit-plotly-events`). Task 2 took two passes: `bc67b5f` (initial annotations + pinned x-range) was rejected at the user's live review; `dcc5850` reworked into English-only multi-lane labels with collision suppression and `cfg.display_name`-tightened retrieval. Task 3 finally landed in `34c3ae5` (ripple click → event-axis sector mode) + `fc0b431` (filter node details to selected branch). Adjacent diagnostics commit `9c9334e` improved price-detail fallback reasoning (`±2`-day window, stronger query, explicit `reason_code` / `reason_detail`). Test count rose well above the Plan-3.6 spec target of 91 because of the subsequent eval-iteration work in Session 11.
 
 Execute plans task-by-task. Each task = TDD cycle + a single `git commit`. Do not batch tasks into one commit.
 
@@ -73,7 +73,7 @@ Every task — inline or subagent — must clear all six before being declared d
 
 If a subagent returns green but any criterion above is unmet (e.g. extra files touched, hardcoded values, test-shaped decoration in production code), review and fix in a follow-up commit before moving on.
 
-## Current Directory Structure (real, end of Session 10 — Plan 3.6 Tasks 1–2 landed; Task 3 blocked at user review gate)
+## Current Directory Structure (real, end of Session 11 — Plan 3.6 fully landed; §9 eval harness shipped + iterated v1 → v5)
 
 ```
 /Users/fangyihe/appliedfinance/
@@ -112,10 +112,10 @@ If a subagent returns green but any criterion above is unmet (e.g. extra files t
 │   ├── __init__.py               # empty
 │   ├── price_chart.py            # Viz 1: Brent line + significant-move markers + y-toggle ($ / %) + threshold slider; Session-10 Task 1 switched click handling to plotly_events(click_event=True) + _click_event_to_iso helper, so plain marker click now updates selected_date without modebar tool activation
 │   ├── price_detail_panel.py     # Zone 3: reads st.session_state["selected_date"] → calls agent_price_explainer.explain_move via @st.cache_data wrapper (cache key now includes cfg.display_name + seed_keywords) → renders ▲/▼ + summary + drivers + caveats + ≤3 cited news + explicit fallback reason block when status=="fallback"
-│   ├── event_axis.py             # Viz 2: horizontal time axis with markers at significant-move dates; Session-10 Task 2 replaced markers+text with multi-lane annotations + stems + pinned x-range + English headline translation + strict collision suppression; Task 3 sector-mode branch NOT started yet
+│   ├── event_axis.py             # Viz 2: horizontal time axis with markers at significant-move dates; Session-10 Task 2 replaced markers+text with multi-lane annotations + stems + pinned x-range + English headline translation + strict collision suppression; Session-11 Task 3 added sector-mode branch (filters markers/labels to ripple-clicked sector via st.session_state["selected_sector"])
 │   ├── sidebar_chat.py           # Persistent chat in sidebar; calls agent_supervisor.run; format_supervisor_result() intent-branches for qa/market/timeline/ripple
-│   └── ripple.py                 # M5 ripple tree (streamlit-agraph); 20-char label truncation + pct-in-tooltip + size-by-severity (critical=22/significant=18/moderate=14); Task 3 NOT started, so tree_to_graph_elements still returns 2-tuple (nodes, edges) and agraph() return value is still discarded
-├── ui_app.py                     # [REWRITTEN Session 9] Single-page event-focused dashboard shell. 2-col top: [price_chart 70% | detail_panel 30%]; below: event_axis full-width; below: ripple_tree full-width; sidebar: event picker + as-of + metadata + "Clear cache & refresh" + persistent chat. Resets selected_date on event switch; selected_sector wiring NOT landed yet
+│   └── ripple.py                 # M5 ripple tree (streamlit-agraph); 20-char label truncation + pct-in-tooltip + size-by-severity (critical=22/significant=18/moderate=14); Session-11 Task 3 done: tree_to_graph_elements now returns 3-tuple (nodes, edges, id_map); agraph() return captured and resolved through id_map to set st.session_state["selected_sector"]
+├── ui_app.py                     # [REWRITTEN Session 9 + Session-11 Task 3] Single-page event-focused dashboard shell. 2-col top: [price_chart 70% | detail_panel 30%]; below: event_axis full-width; below: ripple_tree full-width; sidebar: event picker + as-of + metadata + "Clear cache & refresh" + persistent chat. Resets selected_date AND selected_sector on event switch + cache-clear (both keys flow through the lifecycle reset paths)
 ├── events/
 │   └── iran_war.yaml             # RSS feeds deprecated (empty list)
 ├── data/                         # runtime, gitignored; populated by setup.py run
@@ -124,14 +124,25 @@ If a subagent returns green but any criterion above is unmet (e.g. extra files t
 │   ├── chroma_db/                # persistent MiniLM vector index
 │   ├── manifest.json             # event, snapshot_utc, article_count, source_counts, dedup, ticker_count, missing_tickers
 │   └── setup.lock                # fcntl lock file; presence + non-free state = setup.py is running
+├── eval/                         # [Session 11] §9 evaluation harness — see "Evaluation Iteration Story for Writeup" subsection below
+│   ├── __init__.py
+│   ├── test_queries.json         # 5 retrieval queries + 5 QA queries + 5 (symbol, date) market spot-checks
+│   ├── wikipedia_ground_truth.md # 12 core sectors + 4 secondary; hand-curated from Wikipedia
+│   ├── judge.py                  # shared LLM-as-judge "yes/no" relevance helper used by §9.1 + §9.3
+│   ├── retrieval.py              # §9.1 precision@5 — calls retrieve() then asks judge per hit
+│   ├── ripple_groundedness.py    # §9.2 sector match + price integrity; matcher = substring-with-/-split + Session-11 token-overlap fallback (stoplist of generic business words)
+│   ├── qa_faithfulness.py        # §9.3 sentence-level faithfulness — splits answer into sentences, judges each against retrieved context
+│   ├── market_integrity.py       # §9.4 — calls get_price_on_date for each (symbol, date) pair; counts non-None as ok
+│   ├── run_eval.py               # CLI: writes eval/results/eval-<event>-<ts>.{md,json}; orchestrates all four dimensions; ~$0.5 + ~3-5min per real run
+│   └── results/                  # committed (not gitignored); v1 - v5 reports preserved as the writeup's appendix evidence
 ├── docs/
-│   ├── progress.md               # session log (Sessions 1–10)
+│   ├── progress.md               # session log (Sessions 1–11)
 │   └── superpowers/plans/
 │       ├── 2026-04-16-plan-1-data-foundation.md     # DONE + hardened
 │       ├── 2026-04-16-plan-2-agents.md              # DONE + reviewed (Session 6)
-│       ├── 2026-04-16-plan-3-ui-eval.md             # Tasks 1-3 DONE inline, Tasks 4-5 SUPERSEDED by Plan 3.5, Tasks 6-12 NOT STARTED
+│       ├── 2026-04-16-plan-3-ui-eval.md             # Tasks 1-3 DONE inline, Tasks 4-5 SUPERSEDED by Plan 3.5, Tasks 6-11 + iteration DONE Session 11
 │       ├── 2026-04-24-plan-3.5-ui-redesign.md       # [NEW Session 9] DONE via subagent-driven (16 commits)
-│       └── 2026-04-26-plan-3.6-ui-interaction-fixes.md  # [Session 9 + 10] PARTIALLY EXECUTED: Task 1 done, Task 2 done after follow-up, Addendum appended, Task 3 blocked on user "continue"
+│       └── 2026-04-26-plan-3.6-ui-interaction-fixes.md  # [Sessions 9-11] DONE: Task 1, Task 2 (two-pass), Task 3 all landed
 └── tests/
     ├── __init__.py               # empty
     ├── conftest.py               # fixtures_dir, tmp_data_dir (sets DATA_DIR env)
@@ -151,7 +162,12 @@ If a subagent returns green but any criterion above is unmet (e.g. extra files t
     ├── test_live_agents.py       # 2 tests, gated by RUN_LIVE=1
     ├── test_run_cli.py           # 3 tests
     ├── test_agent_price_explainer.py  # [Session 9 + 10] 5 base tests + 2 Session-9 tightening tests (`bc78f03`) + 1 query-builder test + 1 no-nearby-news reason test; existing fallback tests now assert status/reason_code
-    ├── test_ui_helpers.py        # [Sessions 9–10 evolve] ripple + price_chart click helper (5) + price_detail_panel (3 incl. fallback-reason rendering) + event_axis (3: pinned range, multi-lane placement, translation) + sidebar_chat (3) + ripple-polish (4)
+    ├── test_ui_helpers.py        # [Sessions 9–11 evolve] ripple + price_chart click helper + price_detail_panel + event_axis (incl. Session-11 sector-mode filter) + sidebar_chat + ripple-polish + Session-11 ripple click → id_map → selected_sector wiring
+    ├── test_eval_retrieval.py    # [Session 11] §9.1: 2 tests — precision@k scoring + run_retrieval_eval over multiple queries
+    ├── test_eval_ripple_groundedness.py  # [Session 11] §9.2: 5 tests — exact+fuzzy match, N:1 scoring fix, plural-paraphrase, content-token overlap, generic-words-don't-match-alone, price integrity
+    ├── test_eval_qa_faithfulness.py  # [Session 11] §9.3: 2 tests — sentence splitter + per-sentence faithfulness scoring
+    ├── test_eval_market_integrity.py  # [Session 11] §9.4: 1 test — spot-check ok vs missing counts
+    ├── test_run_eval.py          # [Session 11] orchestrator: 1 test — writes Markdown report with all four dimensions
     └── fixtures/
         ├── yf_brent_sample.csv
         ├── gdelt_response.json
@@ -161,7 +177,7 @@ If a subagent returns green but any criterion above is unmet (e.g. extra files t
         └── intent_examples.json
 ```
 
-**Test counts:** 96 collected → **92 pass + 4 gated-skip** (end of Session 10). Relative to end of Session 9's 85+4, Session 10 added +7 net tests: +1 price-chart click helper (`52a269a`) +2 Task-2 first-pass event-axis tests (`bc67b5f`) +1 translation/relevance event-axis test (`dcc5850`) +3 price-attribution diagnostics tests (`9c9334e`).
+**Test counts:** **107 pass + 4 gated-skip** (end of Session 11). Relative to end of Session 10's 92+4, Session 11 added +15 net tests: Plan-3.6 Task 3 ripple-click wiring tests + Plan-3 Task 6-11 §9 eval harness tests (5 ripple-groundedness incl. Session-11 N:1 fix + token-overlap matcher; 2 retrieval; 2 qa-faithfulness; 1 market-integrity; 1 run-eval orchestrator). The 4 skipped are `RUN_LIVE=1`-gated: 2 in `tests/test_smoke_live.py` (Plan 1) and 2 in `tests/test_live_agents.py` (Plan 2).
 
 **Modules deleted in Session 9 (Plan 3.5 Task 8 single-page rewrite):** `ui/timeline.py` (superseded by `event_axis.py` for narrative timeline), `ui/market.py` (stub never implemented; `price_chart.py` covers Brent specifically + `sidebar_chat.py` market-intent route covers ad-hoc), `ui/qa.py` (stub never implemented; `sidebar_chat.py` is the chat surface). Their corresponding tests were deleted (timeline) or never existed (market, qa).
 
@@ -262,6 +278,58 @@ If the user asks for any of the above mid-stream, flag the scope conflict before
 **Avoid demo queries that require mid-article facts** (specific quotes, specific numbers buried inside articles whose headlines don't contain them). These are the thin spots.
 
 **Project memory file (outside repo):** `~/.claude/projects/-Users-fangyihe-appliedfinance/memory/project_grading_and_deliverables.md` mirrors this subsection in condensed form. Future sessions auto-load it via the auto-memory system, so if a session asks "should we add X feature," the memory surfaces the professor's constraint without requiring the user to re-explain. The CLAUDE.md subsection you are reading now is the **authoritative in-repo record**; if the two ever diverge, trust this file and update the memory.
+
+### Evaluation Iteration Story for Writeup (Session 11, 2026-04-27/28)
+
+**Why this subsection exists:** Lecture 9 Slide 9 specifies the writeup must cover **business problem, architecture, dataset, evaluation, limitations, next steps**. Lecture 9 Slide 10 specifies Week 2 = "test retrieval quality" + Week 3 = "evaluate answer quality on sample cases" — i.e. evaluation is meant to be an iteration loop, not a single one-shot run. This subsection is the canonical narrative to lift directly into the writeup's Evaluation section. Future eval-iteration sessions should append rows to the table below, not rewrite it.
+
+#### How to write the writeup's Evaluation section
+
+1. Open `eval/results/eval-iran_war-20260428-001413.md` (the v5 final report) — paste its tables into the writeup's appendix.
+2. Use the v1 → v5 table below as the body of the Evaluation section. The course wants to see the *story* of how iteration improved the system, not a single snapshot.
+3. Use the limitation paragraphs in this subsection (and the canonical paragraph in "Course Grading Context & Plan 2.5 Rejection" above) verbatim for the Limitations section.
+4. Each iteration commit pair (code/prompt + report) is cited in the narrative below by its short SHA — those become the writeup's "design choice" footnotes per Slide 10 Week 4.
+
+#### v1 → v5 numbers
+
+| Dimension | v1 | v5 | Δ | Source of change |
+|---|---|---|---|---|
+| §9.1 retrieval precision@5 | 0.76 | 0.76 | — | Corpus size NOT the bottleneck (proven by iteration 4) |
+| §9.2 ripple sector precision | 21.2% | 48.1% | +26.9pp | Scoring bug fix + token-overlap matcher |
+| §9.2 ripple sector recall | 58.3% | 75.0% | +16.7pp | Token-overlap matcher + corpus refresh |
+| §9.2 price integrity | 33/33 | 36/36 | — | Always perfect |
+| §9.3 QA faithfulness | 0.55 | 0.60 | +0.05 | Broke out of LLM-judge noise band only after corpus refresh |
+| §9.4 market spot-check | 5/5 | 5/5 | — | Always perfect |
+
+All five reports are preserved in `eval/results/eval-iran_war-*.{md,json}` for the writeup's appendix. Final v5 report path: [`eval/results/eval-iran_war-20260428-001413.md`](eval/results/eval-iran_war-20260428-001413.md).
+
+#### Iteration narrative (drop into writeup verbatim)
+
+> **v1 baseline** (2026-04-27 21:59 UTC). precision@5 = 0.76, ripple precision = 21.2%, ripple recall = 58.3%, faithfulness = 0.55, market spot-check 5/5.
+>
+> **Iteration 1 — §9.2 N:1 matching bug** (commits `c6e290c` + `497be2d`). The original scoring loop in `eval/ripple_groundedness.py::score()` iterated truth sectors first with an early `break`, so once one AI sector matched a given truth, every later AI sector that legitimately referred to the same truth was labelled "hallucinated." `Fertilizer Industry` was thrown out as a hallucination only because `Fertilizer / Ammonia` had already been credited to a sibling node. Fix: invert the loop so each AI sector is scored independently against all truths. Result: ripple precision rose from 21.2% to 37.1% (recall held at 58.3% — correctly, since recall was never affected by this bug).
+>
+> **Iteration 2 — substring-only matcher missed paraphrases** (commits `1a12a90` + `1c3cf4b`). Even after the N:1 fix, `Industrial Metals & Materials` was still hallucinated against `Aluminum / energy-intensive metals`, and `Marine Insurance & War Risk Underwriting` against `Shipping / Tanker insurance`, because substring matching only fired on the literal `aluminum` / `tanker insurance` strings. Fix: token-overlap fallback with lowercase + plural-strip + a small stoplist of generic business words (industry, manufacturing, service, market, system, supply, equipment, global, energy). Two non-generic content tokens overlapping = match. Result: precision 37.1% → 48.1%, recall 58.3% → 66.7%. Recall climbed because the matcher could now credit `Upstream Oil & Gas Producers` against the previously-missed `Oil Supply` via the shared `oil` token.
+>
+> **Iteration 3 — QA prompt tightening** (commits `dda9a3b` + `d481ff9`). Added four hardening rules to `prompts/qa_system.txt` to forbid extrapolating beyond snippets (no inventing numbers, prices, percentages, company names, causal mechanisms; offer "available coverage indicates X but does not specify Y" instead of filling gaps; prefer snippet-close language). Empirical impact on §9.3 alone was within LLM-judge noise (0.50–0.55 across runs). The structural floor on §9.3 is the headline-only corpus, not prompt phrasing. The new rules are kept anyway because they are forward-compatible with any future corpus expansion.
+>
+> **Iteration 4 — corpus refresh** (commit `afc4a69`). Ran `setup.py --event iran_war --refresh` to re-fetch GDELT + NewsAPI + yfinance, lifting the corpus from 1031 to 1387 unique articles (matching the Session-4 baseline). §9.3 faithfulness jumped to **0.60** — the first real movement on §9.3, breaking out of the 0.50-0.55 noise band held by all earlier runs. §9.2 recall climbed to 75.0% as the LLM had more material to draw on (`Airlines / Jet fuel` finally got matched). Critically, §9.1 precision@5 stayed at 0.76, which proves corpus size was NOT the §9.1 bottleneck.
+>
+> **Final v5** (2026-04-28 00:14 UTC): precision@5 = 0.76, ripple precision = 48.1%, ripple recall = 75.0%, faithfulness = 0.60, market 5/5, price integrity 36/36.
+
+#### Limitations to write up (per Slide 9)
+
+1. **§9.3 ceiling = headline-only corpus.** Use the canonical limitation paragraph from "Course Grading Context & Plan 2.5 Rejection" verbatim — it explains why free-tier APIs (GDELT metadata-only, NewsAPI 200-char free-tier preview) cap mid-article evidence, and why Plan 2.5 (full-text scraping) was rejected.
+2. **§9.1 plateau at 0.76.** Corpus size is not the bottleneck (proven by iteration 4). Suspect retrieval ranker or `must_be_about` keyword-list strictness in the LLM judge. The next iteration to try is **query rewriting** — LLM-paraphrase the test query into more specific forms before calling `retrieve()`. This was scoped out of the v0.2 deliverable but is the obvious next step if a session has time.
+3. **§9.2 granularity mismatch.** The ripple tree generates ~30 sectors at depth 3 against a 12-item flat truth list; precision is mathematically capped because true downstream sub-sectors (e.g. `Cybersecurity & Intelligence` as a defense ripple) are absent from the curated truth. A more granular ground truth would lift precision further; this is an evaluator-side investment, not a model-side one.
+
+#### Convention for future eval-iteration sessions
+
+- Each iteration = **CODE/PROMPT commit** followed by a separate **DOCS commit** that checks in the new `eval/results/eval-*.md` and `.json`. Don't bundle them.
+- State noise honestly in commit messages. Do not claim "improvement" without ≥ judge-noise delta (~±0.05 for §9.3, ~±2 sectors for §9.2 LLM tree variance, 0 for §9.4 + price integrity which should ALWAYS be 100%).
+- Before re-running, re-read this subsection to remember per-dimension bottleneck.
+- §9.4 + §9.2 price integrity should ALWAYS be 100%. If either drops, suspect a data refresh issue, not a model regression — start by checking `data/manifest.json`'s `snapshot_utc` and the affected ticker CSV.
+- The v0.2 grade-relevant deliverable is **the v5 markdown report + this iteration narrative**, not a single shiny number. Don't optimize one metric at the expense of telling a coherent story.
 
 ## Conventions Established in Tasks 1–5 (+ Session 4 hardening + Session 6 Plan 2 + Session 7 pre-Plan-3 hardening + Session 9 Plan 3 / 3.5 / 3.6)
 
@@ -621,9 +689,9 @@ Green tests from a subagent are *necessary but not sufficient*. Before accepting
 
 1. `cd /Users/fangyihe/appliedfinance`
 2. Read this file (`CLAUDE.md`) and [`docs/progress.md`](docs/progress.md) for what happened last session. **As of end-of-Session-10, the active plan is still Plan 3.6, but it is MID-EXECUTION, not merely written.** Task 1 is done, Task 2 is done after a user-driven follow-up, and Task 3 has NOT started because the user requested a hard checkpoint after every task and has not yet approved moving past the revised Task-2 UI. Also note the adjacent but out-of-plan diagnostics commit `9c9334e` on the price-detail path. Re-read the **"Course Grading Context & Plan 2.5 Rejection"** subsection under Scope Lock before proposing any data-layer expansion or any output-quality work that would cost >30 minutes of user time — that constraint is still in force.
-3. Read the active plan file: [`docs/superpowers/plans/2026-04-26-plan-3.6-ui-interaction-fixes.md`](docs/superpowers/plans/2026-04-26-plan-3.6-ui-interaction-fixes.md). It now includes an Addendum with runtime corrections and **mandatory review gates after every task**. Plan-file end-state is **91 passed + 4 skipped**, but the current repo is **92 passed + 4 skipped** because `9c9334e` added three diagnostics tests outside original Task 3. **Do not start Task 3 until the user has re-reviewed Task 2 and explicitly said `continue`.**
+3. Active work as of end-of-Session-11: **§9 eval iteration is the live workstream**. Plan 3.6 fully landed earlier in the session. Next planned iteration (per user request): **§9.1 query rewriting** — pre-rewrite each test query with the LLM into more specific forms before retrieval, to break the 0.76 precision@5 plateau. See "Evaluation Iteration Story for Writeup" subsection for the v1 → v5 narrative and remaining bottlenecks.
 4. Sanity-check the environment:
-   - `/opt/anaconda3/envs/macro-ripple/bin/pytest -v` → **92 passed, 4 skipped** (end of Session 10). The 4 skipped are `RUN_LIVE=1`-gated: 2 in `tests/test_smoke_live.py` (Plan 1) and 2 in `tests/test_live_agents.py` (Plan 2).
+   - `/opt/anaconda3/envs/macro-ripple/bin/pytest -v` → **107 passed, 4 skipped** (end of Session 11). The 4 skipped are `RUN_LIVE=1`-gated: 2 in `tests/test_smoke_live.py` (Plan 1) and 2 in `tests/test_live_agents.py` (Plan 2).
    - `/opt/anaconda3/envs/macro-ripple/bin/python -c "import config, os; print(bool(os.environ.get('NEWSAPI_KEY')), bool(os.environ.get('ANTHROPIC_API_KEY')))"` — note that under Claude Desktop, this may print `True False` because the parent shell exports `ANTHROPIC_API_KEY=` (empty) which shadows `.env`. That's only a problem for live runs, not unit tests. To verify the real key is present: `awk -F= '/ANTHROPIC_API_KEY/ {print substr($2,1,15)}' .env` should show `sk-ant-api03-...`. See Library Quirks → `python-dotenv` if you hit this.
    - `git status --short` → expect `?? AGENTS.md` in this worktree. That file is local session context and is intentionally untracked; stage explicitly by file and do NOT sweep it into a commit accidentally. If `.env` appears here as untracked, verify it's still ignored by `.gitignore` (line 7) — do NOT stage it.
    - Optional — verify the Plan-1 data is fresh enough for Plan 2/3 to consume: `ls -la data/manifest.json`. If stale or missing, run `/opt/anaconda3/envs/macro-ripple/bin/python setup.py --event iran_war --refresh` (takes ~30–60s, hits live GDELT + NewsAPI + yfinance).
@@ -631,13 +699,12 @@ Green tests from a subagent are *necessary but not sufficient*. Before accepting
 5. Start the next task per the mode mapping in "Working Mode". If dispatching a subagent, paste the plan task text inline in the brief — do not hand it the plan file. Include "Library Quirks" entries relevant to the task in the subagent's brief.
 6. Before declaring the task done, walk the six Acceptance Criteria plus the Subagent Review Checklist (if applicable).
 
-### Mid-Plan-3.6 specific notes (Session 10 → Session 11 handoff)
+### Plan-3.6 + §9 eval iteration notes (Session 11 → Session 12 handoff)
 
-- **Task 1 is done and should not be re-litigated.** `52a269a` already proved that `plotly_events(click_event=True)` is the correct click path for Viz 1 in this environment. Do not revert to `st.plotly_chart(on_select="rerun")`.
-- **Task 2's first pass was rejected by the user's live review.** `bc67b5f` was not enough. The current accepted code for continued review is `dcc5850`, which adds event-display-name retrieval, English translation, multi-lane placement, and label suppression. Any future Task-2 changes should start from THAT commit's behavior, not the original 2-lane idea.
-- **Task 3 is blocked on a literal user `continue`.** The user requested a hard stop after every task. Even though the repo is green at 92+4, that does NOT authorize starting ripple-click wiring.
-- **Task 3 will still require the return-shape break in `tree_to_graph_elements`.** When Task 3 begins, three existing tests in `test_ui_helpers.py` will need the `nodes, edges, _id_map = ...` update because the current code still returns a 2-tuple.
-- **Known gap still NOT addressed:** `event_axis.render` calls `significant_moves(prices)` with the module-default `_DEFAULT_THRESHOLD_PCT=3.0`, NOT the user-tuned slider value from `price_chart.render()`. Slider plumbing through `st.session_state` was scoped out to keep Plan 3.6 focused on the observed UX failures. If user wants this, it's a small post-Plan-3.6 task.
+- **Plan 3.6 is now fully landed.** `52a269a` (Task 1, plotly_events click), `bc67b5f` + `dcc5850` (Task 2 in two passes), `34c3ae5` + `fc0b431` (Task 3 ripple click → sector mode). Do not re-litigate any of these.
+- **§9 eval harness is up + has been iterated v1 → v5.** See "Evaluation Iteration Story for Writeup" subsection above. Do not re-run the eval blindly — re-read the subsection first to remember per-dimension bottlenecks.
+- **Next planned iteration: §9.1 query rewriting.** §9.1 precision@5 is stuck at 0.76 across all five v1-v5 runs. Iteration 4 (corpus refresh) proved this is NOT a corpus-size problem. The next move is to pre-rewrite each retrieval test query with the LLM into more specific forms before calling `retrieve()`. Implementation sketch: add `eval/query_rewriter.py` with `rewrite(query: str, cfg: EventConfig) -> str`; prepend `cfg.display_name` + `cfg.seed_keywords` context, ask LLM to produce a 1-2 sentence search-optimized query; have `eval/retrieval.py` call this before `retrieve()`. Cost: ~5 LLM calls per eval run (~$0.05). Risk: query rewriting could over-narrow and drop recall — keep an eye on the top-k hit count vs current.
+- **Known gap still NOT addressed:** `event_axis.render` calls `significant_moves(prices)` with the module-default `_DEFAULT_THRESHOLD_PCT=3.0`, NOT the user-tuned slider value from `price_chart.render()`. Slider plumbing through `st.session_state` was scoped out to keep Plan 3.6 focused on the observed UX failures. Small post-Plan-3.6 task if it ever matters.
 - **Price explanation diagnostics improved, but explanation coverage is still corpus-limited.** `9c9334e` makes the UI honest (`no_retrieval`, `no_nearby_news`, `insufficient_evidence`); it does not make every date explainable. Future sessions should not treat remaining fallback cases as proof that the Session-10 fix failed.
 
 ### Pre-Plan-3 specific notes (carry-forward; partly satisfied)
