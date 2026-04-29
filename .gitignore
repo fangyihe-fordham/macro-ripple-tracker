@@ -8,3 +8,5 @@ data/
 .DS_Store
 *.egg-info/
 .claude/
+*.swp
+*.swo
