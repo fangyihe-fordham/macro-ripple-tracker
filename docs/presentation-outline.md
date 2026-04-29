@@ -30,16 +30,20 @@
 > "We didn't just measure once. Per Lecture 9 Slide 10's iterative quality-testing emphasis, we ran the eval six times. §9.2 ripple precision climbed from 21.2% to 58.6% — that came entirely from honest fixes: an N:1 scoring bug in the matcher, then a token-overlap fallback for paraphrases. Recall went 58.3% to 75.0%. §9.3 faithfulness 0.55 to 0.60 — the only thing that moved it was refreshing the corpus, which proves it's a corpus-coverage ceiling. §9.1 retrieval precision stayed at 0.76 across all six versions; we proved that's a structural plateau, not a corpus-size or query-phrasing problem."
 
 ### 6. Limitations + Next Steps (30s)
-**Visual:** two columns, 3 bullets each
-**Limitations:**
-- Headline-only corpus → §9.3 ceiling (free-data course constraint)
-- §9.1 0.76 plateau → LLM-judge keyword strictness, not retrieval
-- Tree depth 30 vs flat truth 12 → granularity mismatch caps precision
+**Visual:** two columns, 2-3 bullets each. Lead with the data-layer limitation; everything else is downstream.
 
-**Next Steps (top 3):**
-- Hybrid BM25 + dense retrieval to break §9.1 plateau
-- Historical reference corpus (1979 + 1990-91 oil shocks) as few-shot priors
-- Knowledge-Graph RAG for queryable sector dependencies
+**Limitations:**
+- **Free-tier APIs only → corpus is headline + ~200 chars, not full articles.** GDELT returns metadata only; NewsAPI free returns 200-char preview capped at 100 results. This is what caps §9.3 faithfulness near 0.60. Lifting it requires either full-text scraping (paywall- and ToS-blocked on major outlets) or a paid API — both excluded by the course rule.
+- **Single-event scope.** Wired for the 2026 Iran War; architecture is event-agnostic but only one event is fully populated.
+
+**Say:** "The biggest constraint is structural, not algorithmic — we work over headlines and 200-char previews because GDELT and NewsAPI free don't give us article bodies. Every other limitation in the report is downstream of this one."
+
+**Next Steps (top 3, anchored to spec §11):**
+- **More events** — populate 2-3 more `events/*.yaml`, including a historical reference (1979 Iranian Revolution / 1990-91 Gulf War) loaded as few-shot priors at ripple-tree generation time.
+- **Multi-event comparison dashboards** — once 2+ events exist, side-by-side comparison shows how sector mechanics shift across crisis types.
+- **Full-text article access** (paid API or curated scraping) — the single biggest unblocker for the §9.3 faithfulness ceiling.
+
+**Say:** "The next step is breadth, not retrieval-tuning — the architecture is already event-agnostic, so adding the 1979 and 1990-91 oil shocks as a reference corpus is a YAML-copy plus an ingestion run."
 
 ### 7. Q&A (5s + as long as questions take)
 **Visual:** repo URL + final eval report path

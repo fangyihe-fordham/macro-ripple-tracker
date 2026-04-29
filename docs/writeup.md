@@ -101,26 +101,39 @@ The complete v1–v6 reports are preserved at [`eval/results/eval-iran_war-*.{md
 
 ## 5. Limitations
 
-1. **QA faithfulness ceiling = headline-only corpus.** GDELT's free DOC API returns article metadata only (URL, headline, domain, date, no body). NewsAPI's free tier returns a ~200-character preview, capped at 100 total results per query, within a 30-day lookback. The vector index is therefore built primarily over headlines and short descriptions rather than full article text, which caps the grounded-QA agent's ability to cite mid-article evidence; it responds honestly when snippet coverage is insufficient. Lifting this would require either (a) full-text scraping — blocked by paywalls on major outlets (WSJ, FT, NYT, Bloomberg) and ToS concerns on others, or (b) a paid news API (Mediastack, NewsCatcher) — both excluded by the project's free-only constraint.
+### 5.1 Primary: Free-tier APIs only — corpus is headline + ~200 chars, not full article text
 
-2. **Retrieval precision plateau at 0.76.** Iteration 4 ruled out corpus size; iteration 5 ruled out query phrasing. Per-query analysis on v6 shows the issue is not retrieval but the LLM judge's strict enforcement of `must_be_about` keywords. Pushing past 0.76 requires either a stronger embedding model than MiniLM, hybrid BM25 + dense retrieval, or a relaxed judge prompt — all evaluator-side investments out of scope for v0.2.
+The ingestion pipeline uses only free-tier data sources, per the course constraint. The consequence is structural:
 
-3. **Ripple-tree granularity mismatch.** The tree generates ~30 sectors at depth 3 against a hand-curated 12-item flat truth list. Even with the token-overlap matcher, precision is mathematically capped because legitimate downstream sub-sectors (e.g. "Cybersecurity & Intelligence" as a defense-adjacent ripple) are absent from the curated truth. A more granular truth list would lift precision; this is evaluator investment, not model improvement.
+- **GDELT 2.0** DOC API returns article **metadata only** — URL, headline, domain, publication date. No body content.
+- **NewsAPI.org free tier** returns a ~200-character `content` preview, capped at 100 total results per query, within a 30-day lookback.
+- **Reuters / AP RSS feeds** shut down in June 2020 and return zero usable content.
 
-4. **Single-event scope.** All wiring is event-agnostic (driven by YAML), but only the 2026 Iran War is fully populated. A reference corpus from 1979 Iranian Revolution + 1990–91 Gulf War is a planned week-2 addition for historical-analog comparison and did not ship in v0.2.
+The vector index is therefore built primarily over **headlines plus short descriptions**, not full articles. This caps analytical depth in two specific ways: (a) the grounded QA agent cannot cite mid-article evidence, only headline-level claims — which is why §9.3 faithfulness tops out near 0.60 even with a tightened prompt; (b) the ripple tree's "supporting news" per sector is a snippet pointer rather than an excerpted quote, which is informative but not exhaustive. The system responds honestly when coverage is insufficient — the UI surfaces explicit `no_nearby_news` / `insufficient_evidence` reason codes instead of hallucinating.
 
-5. **Prompt injection from news snippets.** News snippets are interpolated directly into the QA / news worker system prompts. A hostile snippet could theoretically smuggle instructions. Acceptable for MVP (trusted news sources only); a production deployment would need delimiter-wrapped context blocks or a lightweight pre-filter.
+Lifting this single constraint would require either (a) **full-text scraping** — blocked by paywalls on major outlets (WSJ, FT, NYT, Bloomberg, Economist) and ToS gray-area on others, or (b) a **paid news API tier** (Mediastack, NewsCatcher, etc.) — both excluded by the project's free-only constraint. Every other limitation in this report is downstream of this one.
+
+### 5.2 Single-event scope
+
+All wiring is event-agnostic and YAML-driven (a new event = `cp events/iran_war.yaml events/<new>.yaml`, edit keywords + tickers, run `setup.py`), but only the 2026 Iran War / Strait of Hormuz crisis is fully populated. A reference corpus from analogous historical events (1979 Iranian Revolution, 1990–91 Gulf War) was scoped as a week-2 add-on but did not ship in v0.2.
+
+### 5.3 Prompt injection surface
+
+News snippets are interpolated directly into the QA / news worker system prompts without delimiter escaping. A hostile snippet of the form *"Ignore previous instructions..."* would be passed verbatim to Claude. Acceptable for an MVP that ingests from reputable aggregators (worst case is a misleading citation, not exfiltration), but a production deployment would need delimiter-wrapped context blocks or an injection-pattern pre-filter.
 
 ## 6. Next Steps
 
-In rough order of value:
+In rough priority order, all anchored to spec §11 ("Future Work"):
 
-- **Hybrid BM25 + dense retrieval** to break the §9.1 0.76 plateau (~2-3h work, adds `rank_bm25` dependency).
-- **Reference corpus from 1979 + 1990-91 oil shocks**, loaded at ripple-tree generation time as few-shot priors to anchor sector mechanics in historical analogy.
-- **User-input arbitrary events** via a "New Event" form replacing the YAML edit step — the architecture supports it; only the UI is missing.
-- **Granger causality / event-study statistics** layered onto the ripple tree to convert qualitative impact claims into quantified return / volatility deltas.
-- **Knowledge-Graph RAG** to model sector dependencies as edges (e.g. fertilizer ← natural gas ← oil ← geopolitical), making ripple chains queryable rather than re-generated each time.
-- **TruLens or similar** for continuous eval-drift detection rather than the current snapshot-only harness.
+- **More events.** The architecture is already event-agnostic. The first multi-event sprint is to populate two more `events/*.yaml` files (a non-energy macro shock for breadth, a historical event for depth) and walk through the same ingestion + ripple-generation pipeline end-to-end. (§11.1)
+- **Historical reference corpus** — curated summaries from the **1979 Iranian Revolution** and **1990-91 Gulf War**, loaded by `agent_ripple.generate_structure` as few-shot priors. The goal is not a full pipeline for those events but a small set of hand-edited markdown files that anchor sector mechanics in historical analogy when the LLM generates the ripple tree.
+- **Multi-event side-by-side comparison.** Once two events exist, a comparison dashboard lets analysts hold sector mechanics constant and see how a different event reshapes the tree (which sectors recur, which severity rankings invert).
+- **User-input arbitrary events.** A "New Event" UI form replacing the YAML edit step, validating ticker symbols and date ranges before kicking off `setup.py`. (§11.1)
+- **Full-text article access.** The single biggest unblocker for analytical depth — see Limitations §5.1. Two paths: (a) a paid API tier outside the course's free-data rule, or (b) targeted full-text scraping with a ToS-safe domain whitelist. Lifting this directly raises the §9.3 faithfulness ceiling. (§11.2)
+- **Real-time / incremental data refresh.** Today `setup.py --refresh` rebuilds the full window from scratch. Production use needs an incremental path — daily GDELT chunks, rolling-window expiry, streaming dashboard. (§11.4)
+- **Quantitative event-study layer.** Per §11.3, layer Granger causality and event-study return / volatility statistics onto the qualitative ripple tree, converting "Defense / Aerospace surged" into measured Δ-returns + significance tests against a baseline.
+- **Knowledge-Graph RAG.** Model sector dependencies as graph edges (fertilizer ← natural gas ← oil ← geopolitical) so ripple chains are queryable rather than re-generated each time. (§11.3)
+- **Continuous eval-drift detection** with TruLens or equivalent, replacing the current snapshot-only harness with online quality monitoring. (§11.5)
 
 ---
 

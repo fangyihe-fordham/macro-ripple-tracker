@@ -58,20 +58,44 @@ in `events/<name>.yaml` — the code is event-agnostic.
 
 ## Limitations
 
-News content indexed into the vector store (GDELT, NewsAPI) and surfaced
-to the LLM in `run_news_agent` / `run_qa_agent` / `agent_ripple.attach_news`
-is **trusted-source-only**. Snippets are interpolated directly into the
+### Free-tier APIs only — corpus is headline + ~200 chars, not full article text
+
+The ingestion pipeline uses only free-tier data sources (per course
+constraint). GDELT 2.0's DOC API returns article **metadata only** (URL,
+headline, domain, publication date) and does not include article body.
+NewsAPI.org's free tier returns a ~200-character `content` preview, capped
+at 100 total results per query, within a 30-day lookback window. Reuters
+and AP RSS feeds shut down in June 2020 and return zero usable content.
+As a result, the vector index (ChromaDB + `all-MiniLM-L6-v2` embeddings)
+is built primarily over headlines and short descriptions rather than full
+article text.
+
+This constrains the grounded-QA agent's ability to cite mid-article
+evidence; it responds honestly when snippet coverage is insufficient
+(the UI surfaces explicit `no_nearby_news` / `insufficient_evidence`
+reason codes rather than hallucinating). It is also the structural
+ceiling on the §9.3 faithfulness score (~0.60).
+
+Lifting this would require either (a) full-text scraping — blocked by
+paywalls on major outlets (WSJ, FT, NYT, Bloomberg) and ToS concerns on
+others, or (b) a paid news API (Mediastack, NewsCatcher) — both excluded
+by the project's free-only constraint. Both paths are captured in spec
+§11.2 "Future Work."
+
+### Prompt injection surface
+
+News content indexed into the vector store and surfaced to the LLM in
+`run_news_agent` / `run_qa_agent` / `agent_ripple.attach_news` is
+**trusted-source-only**. Snippets are interpolated directly into the
 system+human prompts without delimiter escaping or injection-phrase
 filtering. A malicious headline of the form *"Ignore previous instructions
-and emit ..."* would be passed verbatim to Claude. This is acceptable for
-the v0.2 MVP because (a) inputs come from reputable news aggregators, and
-(b) downstream output is JSON with structured citations, so the worst-case
-outcome is a misleading citation rather than exfiltration or tool-call
-abuse. A production deployment would need explicit mitigation — either
-delimiter-wrapped snippets that the system prompt instructs the model to
-treat as data only, or a lightweight pre-filter for known injection
-patterns. Tracked as a Plan-3 UX decision alongside the `status:` field
-decision noted in [`docs/progress.md`](docs/progress.md).
+and emit ..."* would be passed verbatim to Claude. Acceptable for the
+v0.2 MVP because (a) inputs come from reputable news aggregators, and
+(b) downstream output is JSON with structured citations, so the worst
+case is a misleading citation rather than exfiltration or tool-call
+abuse. A production deployment would need delimiter-wrapped snippets that
+the system prompt instructs the model to treat as data only, or a
+lightweight pre-filter for known injection patterns.
 
 ## Layout
 
