@@ -23,27 +23,29 @@ _MAX_LABEL_LEN = 20
 
 
 def _label(node: Dict) -> str:
-    """Sector name, truncated to 20 chars with …. Price change moved to tooltip."""
+    """Sector name, truncated to 20 chars with …. Details render below."""
     sec = node.get("sector", "?")
     if len(sec) > _MAX_LABEL_LEN:
         sec = sec[: _MAX_LABEL_LEN - 1].rstrip() + "…"
     return sec
 
 
-def _tooltip(node: Dict) -> str:
-    """Hover-only content: mechanism + precise price change."""
-    parts: List[str] = []
-    mech = node.get("mechanism", "")
-    if mech:
-        parts.append(mech)
-    pc = node.get("price_change")
-    if isinstance(pc, (int, float)):
-        parts.append(f"Δ {pc:+.1f}%")
-    return " · ".join(parts)
+def _graph_node(node_id: str, label: str, size: int, color: str) -> Node:
+    """Create agraph nodes without a URL-like title side effect.
+
+    streamlit-agraph's bundled frontend opens `node.div.innerHTML` on double
+    click. If `title` contains our mechanism text, double-clicking sends bogus
+    GET requests for that sentence as a static file. Keep graph labels clean;
+    detailed mechanisms still render below the graph.
+    """
+    node = Node(id=node_id, label=label, size=size, color=color, title="")
+    node.title = ""
+    node.div = {"innerHTML": ""}
+    return node
 
 
 def tree_to_graph_elements(tree: Dict) -> Tuple[List[Node], List[Edge], Dict[str, Dict]]:
-    nodes: List[Node] = [Node(id="root", label=tree.get("event", "Event"), size=25, color="#1976d2")]
+    nodes: List[Node] = [_graph_node("root", tree.get("event", "Event"), size=25, color="#1976d2")]
     edges: List[Edge] = []
     id_map: Dict[str, Dict] = {}
     counter = {"i": 0}
@@ -55,8 +57,7 @@ def tree_to_graph_elements(tree: Dict) -> Tuple[List[Node], List[Edge], Dict[str
             sev = n.get("severity", "moderate")
             color = _SEVERITY_COLORS.get(sev, "#9e9e9e")
             size = _SEVERITY_SIZES.get(sev, 14)
-            nodes.append(Node(id=nid, label=_label(n), size=size, color=color,
-                              title=_tooltip(n)))
+            nodes.append(_graph_node(nid, _label(n), size=size, color=color))
             edges.append(Edge(source=parent_id, target=nid))
             id_map[nid] = n
             _walk(n.get("children", []), nid)

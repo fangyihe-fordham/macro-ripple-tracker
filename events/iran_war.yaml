@@ -1,7 +1,7 @@
 name: iran_war
 display_name: "2026 Iran War / Strait of Hormuz Closure"
 start_date: "2026-02-28"
-end_date: "2026-04-16"
+end_date: "2026-04-19"
 baseline_date: "2026-02-27"
 seed_keywords:
   - Iran

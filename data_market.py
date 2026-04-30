@@ -91,8 +91,11 @@ def get_price_changes(cfg: EventConfig, as_of: date) -> dict:
         "pct_change": Optional[float],
       }
 
+    `latest` uses the most recent available trading close on or before `as_of`,
+    so a weekend/holiday dashboard date still shows the prior market close.
+
     When `available` is False, the other three fields are None and the reason
-    (missing CSV vs. non-trading baseline vs. non-trading as_of) is logged
+    (missing CSV vs. non-trading baseline vs. no close on/before as_of) is logged
     via _load or silently skipped. The dict ALWAYS contains every symbol in
     `cfg.tickers` — no KeyError for consumers that iterate `cfg.tickers` and
     look up each one. This is the contract Plan 2's agent_ripple relies on.
@@ -105,12 +108,12 @@ def get_price_changes(cfg: EventConfig, as_of: date) -> dict:
             out[ticker.symbol] = entry
             continue
         baseline = df[df["Date"].dt.date == cfg.baseline_date]
-        latest = df[df["Date"].dt.date == as_of]
-        if baseline.empty or latest.empty:
+        latest_candidates = df[df["Date"].dt.date <= as_of]
+        if baseline.empty or latest_candidates.empty:
             out[ticker.symbol] = entry
             continue
         b = float(baseline["Close"].iloc[0])
-        l = float(latest["Close"].iloc[0])
+        l = float(latest_candidates.sort_values("Date").iloc[-1]["Close"])
         out[ticker.symbol] = {
             "available": True,
             "baseline": b,

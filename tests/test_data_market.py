@@ -58,6 +58,17 @@ def test_get_price_changes_vs_baseline(tmp_data_dir, fake_yf):
     assert changes["BZ=F"]["pct_change"] == pytest.approx(49.60, abs=0.1)
 
 
+def test_get_price_changes_uses_previous_close_for_non_trading_as_of(tmp_data_dir, fake_yf):
+    cfg = load_event("iran_war")
+    data_market.download_prices(cfg)
+
+    changes = data_market.get_price_changes(cfg, as_of=date(2026, 3, 1))
+
+    assert changes["BZ=F"]["available"] is True
+    assert changes["BZ=F"]["latest"] == pytest.approx(74.20)
+    assert changes["BZ=F"]["pct_change"] == pytest.approx(0.0)
+
+
 def test_get_price_changes_keeps_missing_ticker_with_available_false(
     tmp_data_dir, fake_yf
 ):

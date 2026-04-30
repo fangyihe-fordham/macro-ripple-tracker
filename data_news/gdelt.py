@@ -8,9 +8,19 @@ from gdeltdoc import GdeltDoc, Filters
 from config import EventConfig
 
 
-_CHUNK_DAYS = 7
+_CHUNK_DAYS = 14
 _MAX_RECORDS_PER_CHUNK = 250
-_SLEEP_BETWEEN_CHUNKS = 6  # GDELT throttles at "one request per 5 seconds" per their error message; pad to 6 for safety
+_SLEEP_BETWEEN_CHUNKS = 60
+_RATE_LIMIT_RETRY_BASE_SECONDS = 90
+_MAX_RATE_LIMIT_RETRIES = 3
+
+
+def _is_rate_limit_error(exc: Exception) -> bool:
+    return "limit requests" in str(exc).lower()
+
+
+def _retry_sleep_seconds(attempt: int) -> int:
+    return _RATE_LIMIT_RETRY_BASE_SECONDS * (2 ** (attempt - 1))
 
 
 def fetch(cfg: EventConfig) -> List[Dict]:
@@ -29,10 +39,25 @@ def fetch(cfg: EventConfig) -> List[Dict]:
             end_date=chunk_end.isoformat(),
             num_records=_MAX_RECORDS_PER_CHUNK,
         )
-        try:
-            df = client.article_search(filters)
-        except Exception as e:
-            print(f"[gdelt] Chunk {chunk_idx} {chunk_start}→{chunk_end} failed: {e}")
+        attempts = 0
+        while True:
+            try:
+                df = client.article_search(filters)
+                break
+            except Exception as e:
+                attempts += 1
+                can_retry = _is_rate_limit_error(e) and attempts <= _MAX_RATE_LIMIT_RETRIES
+                if not can_retry:
+                    print(f"[gdelt] Chunk {chunk_idx} {chunk_start}→{chunk_end} failed: {e}")
+                    df = None
+                    break
+                sleep_seconds = _retry_sleep_seconds(attempts)
+                print(
+                    f"[gdelt] Chunk {chunk_idx} {chunk_start}→{chunk_end} rate-limited; "
+                    f"sleeping {sleep_seconds}s before retry {attempts}/{_MAX_RATE_LIMIT_RETRIES}"
+                )
+                time.sleep(sleep_seconds)
+        if df is None:
             chunk_start = chunk_end
             continue
         count = 0 if df.empty else len(df)
