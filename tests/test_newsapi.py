@@ -1,5 +1,5 @@
 import json
-from datetime import date
+from datetime import date, timedelta
 
 from data_news import newsapi_fetcher
 from config import load_event
@@ -60,13 +60,16 @@ def test_fetch_newsapi_clamps_start_to_30_day_window(monkeypatch):
             return {"articles": []}
 
     monkeypatch.setattr(newsapi_fetcher, "NewsApiClient", FakeClient)
-    cfg = load_event("iran_war")  # start=2026-02-28, end=2026-04-16
+    cfg = load_event("iran_war")
     newsapi_fetcher.fetch(cfg, max_pages=1)
 
-    # today=2026-04-22, earliest=today-29d=2026-03-24; cfg.start_date predates it → clamped
-    assert captured["from"] == "2026-03-24"
-    # cfg.end_date 2026-04-16 is inside the window → not clamped
-    assert captured["to"] == "2026-04-16"
+    # today=2026-04-22, earliest = today - 29d = 2026-03-24.
+    # `from` should be clamped up to 2026-03-24 if cfg.start_date predates it.
+    expected_from = max(cfg.start_date, _FixedDate.today() - timedelta(days=29)).isoformat()
+    # `to` should be clamped down to today if cfg.end_date is in the future.
+    expected_to = min(cfg.end_date, _FixedDate.today()).isoformat()
+    assert captured["from"] == expected_from
+    assert captured["to"] == expected_to
 
 
 def test_fetch_newsapi_skips_when_window_entirely_before_free_tier(monkeypatch):

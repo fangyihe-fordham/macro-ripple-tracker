@@ -10,7 +10,7 @@ from config import EventConfig
 
 _CHUNK_DAYS = 7
 _MAX_RECORDS_PER_CHUNK = 250
-_SLEEP_BETWEEN_CHUNKS = 2
+_SLEEP_BETWEEN_CHUNKS = 6  # GDELT throttles at "one request per 5 seconds" per their error message; pad to 6 for safety
 
 
 def fetch(cfg: EventConfig) -> List[Dict]:

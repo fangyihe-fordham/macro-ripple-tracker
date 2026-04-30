@@ -1,9 +1,15 @@
 import json
+import math
 
 import pandas as pd
 
 from data_news import gdelt
 from config import load_event
+
+
+def _expected_chunk_count(cfg) -> int:
+    days = (cfg.end_date - cfg.start_date).days
+    return math.ceil(days / 7)
 
 
 def test_fetch_gdelt_returns_normalized_articles(monkeypatch, fixtures_dir):
@@ -23,7 +29,7 @@ def test_fetch_gdelt_returns_normalized_articles(monkeypatch, fixtures_dir):
     cfg = load_event("iran_war")
     articles = gdelt.fetch(cfg)
 
-    assert len(captured["filters_list"]) == 7
+    assert len(captured["filters_list"]) == _expected_chunk_count(cfg)
 
     assert len(articles) == 2
     a = articles[0]
@@ -36,8 +42,8 @@ def test_fetch_gdelt_returns_normalized_articles(monkeypatch, fixtures_dir):
     first_qp = " ".join(captured["filters_list"][0].query_params)
     last_qp = " ".join(captured["filters_list"][-1].query_params)
     assert "Hormuz" in first_qp
-    assert "startdatetime=20260228" in first_qp
-    assert "enddatetime=20260416" in last_qp
+    assert f"startdatetime={cfg.start_date.strftime('%Y%m%d')}" in first_qp
+    assert f"enddatetime={cfg.end_date.strftime('%Y%m%d')}" in last_qp
 
 
 def test_fetch_gdelt_empty_result(monkeypatch):
@@ -70,5 +76,5 @@ def test_fetch_gdelt_chunk_failure_does_not_kill_pipeline(monkeypatch, fixtures_
     cfg = load_event("iran_war")
     articles = gdelt.fetch(cfg)
 
-    assert len(call_log) == 7
+    assert len(call_log) == _expected_chunk_count(cfg)
     assert len(articles) == 2
